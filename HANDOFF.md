@@ -91,6 +91,9 @@ Field-test round 1 (2026-10-06): 6 real repos, every citation checked by hand. O
 - `.claude/worktrees/<name>/` copies of the repo are read, so one sentence gets cited several times. Folders that `.gitignore` lists (caches, browser snapshots, graph caches) are read too. In one large repo the scorer scanned 20,881 files where git tracks 2,539, and the run took 22 minutes.
 - Fixture: `.gitignore` with `cache/`, plus `cache/notes.md` containing "human gate" and "a join node". Also `.claude/worktrees/w1/CLAUDE.md`. Expected: neither file is cited, and `files_scanned` counts neither.
 - Fix: skip `.claude/worktrees/`, and skip the paths `.gitignore` ignores (simple patterns are enough; no full gitignore engine).
+- Exceptions (Micha, 2026-10-06), each pinned by a guard case:
+  - State files (`state.json`, `jobs.json`, `state.jsonl`, `jobs.jsonl`) are still read when `.gitignore` lists them. Real loops often ignore their state folder. Fixture: `.gitignore` with `state/` and a valid `state/state.json`. Expected: `running: true`.
+  - A `.env*` file that `.gitignore` ignores does not fail "no inline secrets": an ignored env file is the right place for a key. A `.env` that is not ignored is still read and still fails. Fixtures: `.gitignore` with `.env` plus `.env` holding `API_KEY=` and a 20-character value: passes. The same `.env` without that `.gitignore` line: fails.
 
 ### F3. The weakest hit is cited
 - `.gitignore` containing `.pytest_cache/` passes "verify command" and "evidence verify", even when `pytest` sits in `CLAUDE.md`. Fixture: a `.gitignore` with only `.pytest_cache/`. Expected: verify command fails.
