@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **113/113** on Python 3.13.16 with PyYAML 6.0.3.
+**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **123/123** on Python 3.13.16 with PyYAML 6.0.3.
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 113 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 123 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 113/113
+python3 evals/run_evals.py                       # expect 123/123
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -56,6 +56,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | D1, D2 | Rubric and README claims aligned with the code. |
 | D6 | SKILL.md frontmatter keeps only `name` and `description` (`type` and `lifecycle` removed). The `harness-creator` pointer is gone; no other skill is named. |
 | M1, L1 | State files are parsed from the full file (up to 50M characters), `jobs`/`records`/`items` wrappers one level down count, `state.jsonl`/`jobs.jsonl` are read line by line, and a `RecursionError` or `ValueError` on bad JSON is caught instead of crashing the scorer. |
+| M3 | Pass: `MAX_RETRIES = 3`, `stop_after_attempt(3)`, `npm run test`, non-empty `allow`/`deny` in `.claude/settings*.json`, "spend cap". Fail: `pytest>=8.0` dependency lines (and `requirements*.txt`), "token budget of N" as an attempt cap (the `budget of \d` alternative is removed). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -70,25 +71,6 @@ Scoring this folder returns 0% on purpose (see decision 6).
 ## 6. Open work, in suggested order
 
 Each item gives a reproduction case to turn into an eval fixture first (it must fail on the current code), then the expected result.
-
-### M3. Common real config scores wrong
-
-False negatives (should pass):
-
-| Fixture | Check |
-|---|---|
-| `MAX_RETRIES = 3` | attempt cap |
-| `@retry(stop=stop_after_attempt(3))` | attempt cap |
-| "Run npm run test before merging." | verify command (`npm run lint` already passes) |
-| `.claude/settings.json` with `{"permissions": {"allow": [...], "deny": [...]}}` | tool boundary |
-| "There is a spend cap of $5 per run." | budget |
-
-False positives (should fail):
-
-| Fixture | Check |
-|---|---|
-| `pytest>=8.0` in `requirements-dev.txt` | verify command (a dependency line, not a command) |
-| "We have a token budget of 50000." | attempt cap (the `budget of \d` alternative) |
 
 ### M2. Runner detection
 

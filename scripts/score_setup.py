@@ -102,11 +102,11 @@ PLACEHOLDER_RE = re.compile(
 ENV_VAR_NAME_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
 # A numeric cap. "max attempts" alone (no number) no longer counts.
 ATTEMPT_RE = re.compile(
-    r"(max[_\s-]?attempts(?:\s*(?:of|is|to|at)?\s*|[^\n\d]{0,20}?[:=]\s*)\d"
+    r"(max[_\s-]?(?:attempts|retries)(?:\s*(?:of|is|to|at)?\s*|[^\n\d]{0,20}?[:=]\s*)\d"
+    r"|\bstop_after_attempt\(\s*\d"
     r"|attempt(?:s)?\s*[:=<]\s*\d"
     r"|retry(?:\s+cap)?\s*(?:of|at|<=|:)?\s*\d"
-    r"|\bmax(?:imum)?\s+(?:of\s+)?\d+\s+(?:attempts|retries|tries)\b"
-    r"|budget of \d)",
+    r"|\bmax(?:imum)?\s+(?:of\s+)?\d+\s+(?:attempts|retries|tries)\b)",
     re.I,
 )
 
@@ -128,8 +128,10 @@ NEGATED_AFTER_RE = re.compile(
     re.I,
 )
 CLAUSE_BREAK_RE = re.compile(r"[.;:!?,]")
+# pytest followed by a version specifier or extras is a dependency line, not a command.
 VERIFY_CMD_RE = re.compile(
-    r"(npm test|pytest|go test|cargo test|pnpm test|yarn test|make test|npm run (?:lint|typecheck))",
+    r"(npm test|pytest(?!\s*[<>=!~\[])|go test|cargo test|pnpm test|yarn test|make test"
+    r"|npm run (?:lint|typecheck|test)\b)",
     re.I,
 )
 FAIL_CLOSED_RE = re.compile(r"(fail closed|exit code|must pass|non-zero)", re.I)
@@ -308,6 +310,27 @@ def cite_named(files: list[tuple[str, list[str]]], pattern: str, filename: str) 
     return None
 
 
+def verify_files(files: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
+    """Files that may hold a verify command: requirements files only list dependencies."""
+    return [f for f in files if not re.match(r"requirements.*\.txt$", Path(f[0]).name, re.I)]
+
+
+# A non-empty allow or deny list in Claude Code settings is a tool boundary.
+PERMISSION_LIST_RE = re.compile(r'"(?:allow|deny)"\s*:\s*\[\s*"')
+
+
+def permissions_cite(files: list[tuple[str, list[str]]]) -> str | None:
+    for name, lines in files:
+        if not re.fullmatch(r"(?:.*/)?\.claude/settings(?:\.local)?\.json", name):
+            continue
+        # The list may start on a later line than its key, so test the joined text.
+        text = "\n".join(lines)
+        m = PERMISSION_LIST_RE.search(text)
+        if m:
+            return f"{name}:{text.count(chr(10), 0, m.start()) + 1}"
+    return None
+
+
 def instruction_cite(files: list[tuple[str, list[str]]]) -> str | None:
     found = cite(files, r"definition of done")
     if found:
@@ -396,9 +419,11 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     secret_ok = scanned and found is None
     secret_cite = f"scanned:{len(files)}" if secret_ok else found
     isolation = cite_affirmed(files, [r"worktree", r"branch per", r"isolated branch"], shared_words=True)
-    boundary = cite_affirmed(files, [r"allowlist", r"protected path", r"cannot merge", r"cannot push"])
+    boundary = cite_affirmed(files, [r"allowlist", r"protected path", r"cannot merge", r"cannot push"]) or permissions_cite(
+        files
+    )
     trace = cite_affirmed(files, [r"\btrace\b", r"audit log", r"tool call", r"run log"])
-    budget = cite_affirmed(files, [r"timeout", r"token budget", r"max minutes", r"\bbudget\b"])
+    budget = cite_affirmed(files, [r"timeout", r"token budget", r"max minutes", r"\bbudget\b", r"spend cap"])
     checks = [
         (
             "instruction file",
@@ -411,9 +436,9 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
         (
             "verify command",
             15,
-            cite_any(files, [VERIFY_CMD_RE.pattern]) is not None,
+            cite_any(verify_files(files), [VERIFY_CMD_RE.pattern]) is not None,
             "A named test, lint, or typecheck command",
-            cite_any(files, [VERIFY_CMD_RE.pattern]),
+            cite_any(verify_files(files), [VERIFY_CMD_RE.pattern]),
             None,
         ),
         (
@@ -472,7 +497,7 @@ def loop_checks(files: list[tuple[str, list[str]]]) -> dict:
     # Claim, fail-closed and repeated-error are phrases. In code they only ever match
     # comments ("non-zero in the result", "Same error message"), so they read docs and config.
     prose = of_kind(files, "doc", "config")
-    command = cite_any(files, [VERIFY_CMD_RE.pattern])
+    command = cite_any(verify_files(files), [VERIFY_CMD_RE.pattern])
     closed = cite_any(prose, [FAIL_CLOSED_RE.pattern])
     repeated = cite_any(prose, [r"same error", r"same failure", r"\btwice\b", r"\bstuck\b"])
     claim = cite_affirmed(prose, [r"(?<!any )\bclaim\b", r"in progress", r"lock file", r"already taken"])

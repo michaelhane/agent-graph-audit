@@ -265,6 +265,26 @@ CASES = [
     ("graph: conditional edge in docs", {"README.md": "Conditional edge: review -> gate when tests pass.\n"},
      {"pass:conditional edges": True}),
 
+    # Common real config (review item M3). False negatives: these must pass.
+    ("config: MAX_RETRIES constant", {"loop.py": "MAX_RETRIES = 3\n"}, {"pass:attempt cap": True}),
+    ("config: tenacity stop_after_attempt", {"loop.py": "@retry(stop=stop_after_attempt(3))\ndef call(): ...\n"},
+     {"pass:attempt cap": True}),
+    ("config: npm run test", {"README.md": "Run npm run test before merging.\n"}, {"pass:verify command": True}),
+    ("config: claude settings permissions", {".claude/settings.json": json.dumps(
+        {"permissions": {"allow": ["Bash(npm test)"], "deny": ["Read(./.env)"]}})},
+     {"pass:tool boundary": True}),
+    ("config: spend cap", {"README.md": "There is a spend cap of $5 per run.\n"}, {"pass:budget": True}),
+    # False positives: these must fail.
+    ("config: pytest dependency line", {"requirements-dev.txt": "pytest>=8.0\n"}, {"fail:verify command": True}),
+    ("config: pytest in pyproject dependencies", {"pyproject.toml": 'dependencies = ["pytest>=8.0"]\n'},
+     {"fail:verify command": True}),
+    ("config: token budget is not an attempt cap", {"README.md": "We have a token budget of 50000.\n"},
+     {"fail:attempt cap": True}),
+    ("config: empty claude permissions", {".claude/settings.json": '{"permissions": {"allow": [], "deny": []}}'},
+     {"fail:tool boundary": True}),
+    ("config: allow list outside .claude", {"cors.json": '{"allow": ["https://example.com"]}'},
+     {"fail:tool boundary": True}),
+
     # Found in Python's own stdlib (email/_header_value_parser.py) during review.
     ("secret: descriptor key token_type", {"parser.py": "    token_type = 'unstructured'\n"},
      {"pass:no inline secrets": True}),

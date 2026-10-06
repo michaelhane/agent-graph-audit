@@ -34,20 +34,20 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 | Check | Weight | Passes when |
 |---|---:|---|
 | Instruction file | 15 | `AGENTS.md`, `CLAUDE.md`, or a definition of done |
-| Verify command | 15 | A real command: `npm test`, `pytest`, `go test`, `cargo test`, `pnpm test`, `yarn test`, `make test`, `npm run lint`, `npm run typecheck` |
+| Verify command | 15 | A real command: `npm test`, `pytest`, `go test`, `cargo test`, `pnpm test`, `yarn test`, `make test`, `npm run lint`, `npm run typecheck`, `npm run test`. A dependency line (`pytest>=8.0`, `pytest[extras]`, anything in `requirements*.txt`) is not a command. |
 | Secret ignore | 10 | `.gitignore` itself mentions `.env` |
 | No inline secrets | 10 | At least one file was scanned and no secret was found. A secret is a key name assigned a quoted literal of 12+ characters, or an unquoted value in a `.env`-style file. Placeholders, paths, env-var names, and descriptor keys like `token_type` don't count |
 | Work isolation | 10 | Worktree, branch per, or isolated branch. "one branch" does not pass. *neg*, and "share a single worktree" does not pass |
-| Tool boundary | 15 | Allowlist, protected path, or cannot merge/push. *neg* |
+| Tool boundary | 15 | Allowlist, protected path, cannot merge/push, or a non-empty `allow`/`deny` list in `.claude/settings.json` or `.claude/settings.local.json`. *neg* |
 | Trace | 15 | Trace, audit log, tool call, or run log. *neg* |
-| Budget | 10 | Timeout, token budget, max minutes, or budget. *neg* |
+| Budget | 10 | Timeout, token budget, max minutes, spend cap, or budget. *neg* |
 
 ## Loop (100)
 
 | Check | Weight | Award | Passes when |
 |---|---:|---:|---|
 | Claim | 15 | 15 | Claim, in progress, lock file, or already taken, in docs or config. *neg* |
-| Attempt cap | 20 | 20 | A numeric retry or attempt cap: `max_attempts: 3`, `max 3 attempts`, `retry 2`. "max attempts" without a number does not pass. *neg* |
+| Attempt cap | 20 | 20 | A numeric retry or attempt cap: `max_attempts: 3`, `MAX_RETRIES = 3`, `stop_after_attempt(3)`, `max 3 attempts`, `retry 2`. A "token budget of N" is not an attempt cap. "max attempts" without a number does not pass. *neg* |
 | Evidence verify | 20 | 20 | A real test command plus a fail-closed phrase |
 | Fail closed | 15 | 15 | Fail closed, exit code, must pass, or non-zero, in docs or config |
 | Repeated error exit | 15 | 7 | Same error, same failure, twice, or stuck, in docs or config. Half until a fingerprint exists |
