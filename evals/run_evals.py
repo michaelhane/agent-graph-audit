@@ -44,7 +44,7 @@ def gate_case(line: str) -> dict[str, str]:
 
 
 # (name, files, expectations)
-# Expectation keys: final, running, harness, loop, graph, and pass:<check>/fail:<check>.
+# Expectation keys: final, running, harness, loop, graph, raw, graph_effective, and pass:<check>/fail:<check>.
 CASES = [
     # Baselines
     ("empty", {}, {"final": 0}),
@@ -288,6 +288,24 @@ CASES = [
     ("state: all three words", {"README.md": "Each record has a job_id, a status and an attempt.\n"},
      {"pass:external state": True}),
 
+    # Caps that change the result (review eval gaps). A real state file lifts the 69 ceiling,
+    # so only the cap under test can move the score.
+    ("cap: graph credit is limited to loop + 20", {
+        "state.json": '[{"job_id":"j1","status":"failed","attempt":1}]',
+        "README.md": "nodes: intake -> triage -> fix.\nIf tests passed, go on. human gate. ignore. bounded. join.\n"},
+     {"running": True, "harness": 10, "loop": 0, "graph": 100, "graph_effective": 20, "raw": 9, "final": 9}),
+    ("cap: graph credit within loop + 20 is not reduced", {
+        "state.json": '[{"job_id":"j1","status":"failed","attempt":1}]',
+        "README.md": STUFFED},
+     {"running": True, "graph_effective": 100}),
+    ("cap: harness under 40 caps the composite at 49", {
+        "state.json": '[{"job_id":"j1","status":"failed","attempt":1}]',
+        "README.md": (
+            "npm test. worktree per job. claim. max_attempts 3. fail closed. same error twice.\n"
+            "nodes: intake -> triage -> fix.\nIf tests passed, go on. human gate. ignore. bounded. join.\n"
+            "job_id status attempt.\n")},
+     {"running": True, "harness": 35, "raw": 77, "final": 49}),
+
     # Runner detection is GitHub Actions only (review item M2, smaller option).
     ("runner: langgraph path is not a workflow", with_stuffed({"langgraph/pipeline.yml": REAL_WF}),
      {"final": 69, "running": False}),
@@ -372,6 +390,8 @@ def evaluate(data: dict, expect: dict) -> list[str]:
         "harness": data["harness"]["score"],
         "loop": data["loop"]["score"],
         "graph": data["graph"]["score"],
+        "raw": data["composite"]["raw"],
+        "graph_effective": data["composite"]["graph_effective"],
     }
     for key, want in expect.items():
         if key in actual:

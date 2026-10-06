@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **151/151** on Python 3.13.16 with PyYAML 6.0.3.
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gives **154/154** on Python 3.13.16 with PyYAML 6.0.3.
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 151 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 154 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 151/151
+python3 evals/run_evals.py                       # expect 154/154
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -65,6 +65,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | L4 | A scorer crash now fails the cases that hit it (`ScorerCrash`) instead of aborting the eval run. `EVAL_SCORER` swaps in another scorer; only the crash check uses it. |
 | L5 | `instruction file`, `verify command` and `secret ignore` compute their citation once each in `harness_checks`. |
 | L6 | "Secret ignore" needs a `.gitignore` line that ignores `.env` itself (`.env`, `/.env`, `**/.env`, `.env*`, `*.env`). `.envrc`, `.env.example`, `!` un-ignore lines and comments no longer pass. `cite_named` was unused after this and is removed. |
+| Eval gaps | Three cases pin the caps: graph credit cut to loop + 20, graph credit left alone inside the limit, and harness under 40 capping the composite at 49 (all with a real state file, so the 69 ceiling can't hide them). Checked by mutation: with the slack and the 49 cap loosened, two of them fail. The PyYAML-missing path was covered under D5. These are coverage cases; they pass on the code before and after, so they could not be shown failing first. |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -80,10 +81,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 
 Each item gives a reproduction case to turn into an eval fixture first (it must fail on the current code), then the expected result.
 
-### Docs, output and hygiene
-
-
-**Eval gaps:** no case where the graph cap (`loop + 20`) or the harness-under-40 cap actually changes the result, and no case for the PyYAML-missing path.
+Nothing open from the v0.2 list. Remaining ideas are under Known limits.
 
 ### Known limits (accepted for now, documented in README)
 
