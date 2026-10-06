@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **105/105** on Python 3.13.16 with PyYAML 6.0.3.
+**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **106/106** on Python 3.13.16 with PyYAML 6.0.3.
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 105 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 106 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 105/105
+python3 evals/run_evals.py                       # expect 106/106
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -54,6 +54,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | H7 | Prose words matched inside code (`", ".join`, `# type: ignore`, license "ANY CLAIM", comments) and in vendored folders. Graph checks and the loop's claim, fail-closed and repeated-error checks now read docs and config only. Code counts for the graph through `add_node`, `add_conditional_edges`, `add_edge([a, b], c)` and numeric bounds. More folders are skipped (vendor, caches, virtual environments by `pyvenv.cfg`), and so are license files. Python stdlib: 69% → 28%. |
 | L3 | Dead code (`names_blob`, `file_text`) removed. |
 | D1, D2 | Rubric and README claims aligned with the code. |
+| D6 | SKILL.md frontmatter keeps only `name` and `description` (`type` and `lifecycle` removed). The `harness-creator` pointer is gone; no other skill is named. |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -105,7 +106,6 @@ False positives (should fail):
 - **D3:** an empty, 0-byte `CLAUDE.md` passes "instruction file", citing a line 1 that doesn't exist. Should fail.
 - **D4:** "external state" says "job id, status, and attempt" but never checks status, and cites only the `job_id` line.
 - **D5:** with PyYAML missing, the report says both "no real runner…" (cap line) and "do not read this as a missing runner". Reword one.
-- **D6:** the `type` and `lifecycle` frontmatter keys in `SKILL.md` are rejected by the skill-creator validator (`quick_validate.py`). Not verified whether Claude Code itself cares. `SKILL.md` also points to a `harness-creator` skill that may not exist where this gets installed.
 - **L2:** `run_evals.py` runs the scorer with `python -I`, which hides `pip install --user` packages. If PyYAML was installed that way, the "real workflow" eval should fail. Use a venv, or `-s -E` instead of `-I`.
 - **L4:** `score()` in `run_evals.py` uses `check=True`, so one scorer crash aborts the whole run instead of failing one case.
 - **L5:** `verify command`, `instruction file` and `secret ignore` still compute their citation twice (minor speed issue).

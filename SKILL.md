@@ -1,15 +1,13 @@
 ---
 name: agent-graph-audit
 description: "Score an agent setup as a percentage on harness, loop, and graph readiness. Use when the user asks to audit a repo, check if a workflow is a real graph, check looping, or score a Claude or agent harness."
-type: workflow
-lifecycle: active
 ---
 
 # Agent Graph Audit — Score the setup
 
 Score a folder or repo on three layers. Report percentages. Do not invent a passing grade from a chat description if the files are available.
 
-Not for writing a new harness from scratch — use harness-creator for that. Not for prompt tuning.
+Not for writing a new harness from scratch. Not for prompt tuning.
 
 This version is a claim-tier scorer. It matches text and parsed files. It does not execute the loop.
 

@@ -371,6 +371,19 @@ def symlinked_instructions(tmp: Path) -> list[str]:
     return [] if ok else ["instruction file: want pass, got fail"]
 
 
+def skill_frontmatter(tmp: Path) -> list[str]:
+    """SKILL.md frontmatter has only documented keys and names no other skill (item D6)."""
+    text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+    end = text.find("\n---", 3)
+    keys = {line.split(":", 1)[0] for line in text[3:end].splitlines() if line[:1].isalpha()}
+    errors = []
+    if keys != {"name", "description"}:
+        errors.append(f"frontmatter keys {sorted(keys)}, want ['description', 'name']")
+    if "harness-creator" in text:
+        errors.append("SKILL.md names harness-creator")
+    return errors
+
+
 SPECIAL = [
     *(repo_under(d) for d in ("artifacts", "build", "dist", "venv", "node_modules")),
     installed_skill("core files", ".claude/skills/agent-graph-audit", only_core=True),
@@ -380,6 +393,7 @@ SPECIAL = [
     installed_skill("plugin path", ".claude/plugins/x/skills/agent-graph-audit"),
     ("self scan reports skip", self_scan),
     ("symlinked CLAUDE.md outside repo", symlinked_instructions),
+    ("skill frontmatter is documented keys only", skill_frontmatter),
 ]
 
 
