@@ -324,10 +324,15 @@ def build(root: Path, files: dict[str, str]) -> None:
         path.write_text(text, encoding="utf-8")
 
 
-def score(root: Path) -> dict:
+# -E and -P keep PYTHON* variables and the current folder out of the scorer, as -I does,
+# but unlike -I they leave the user site visible, where `pip install --user pyyaml` puts it.
+SCORER_FLAGS = ["-E", "-P"]
+
+
+def score(root: Path, env: dict | None = None) -> dict:
     out = subprocess.run(
-        [sys.executable, "-I", str(SCORER), "--target", str(root), "--json"],
-        capture_output=True, text=True, check=True,
+        [sys.executable, *SCORER_FLAGS, str(SCORER), "--target", str(root), "--json"],
+        capture_output=True, text=True, check=True, env=env,
     )
     return json.loads(out.stdout)
 
@@ -500,6 +505,24 @@ def yaml_missing_score(tmp: Path) -> list[str]:
     return errors
 
 
+def user_site_pyyaml(tmp: Path) -> list[str]:
+    """PyYAML installed with `pip install --user` is visible to the scorer (item L2).
+
+    A stub yaml module in a throwaway user site claims every file is a workflow
+    with a runner. The scorer sees that only if it runs with the user site on.
+    """
+    home = tmp / "home"
+    home.mkdir()
+    env = {**os.environ, "HOME": str(home)}
+    site = subprocess.run([sys.executable, "-c", "import site; print(site.getusersitepackages())"],
+                          capture_output=True, text=True, check=True, env=env).stdout.strip()
+    build(Path(site), {"yaml.py": "def safe_load(text):\n    return {'jobs': {'x': {'runs-on': 'u'}}}\n"})
+    repo = tmp / "repo"
+    build(repo, {".github/workflows/x.yml": "not: a workflow\n"})
+    data = score(repo, env)
+    return [] if data["running"] else ["scorer did not import PyYAML from the user site"]
+
+
 def citation_of(root: Path, files: dict[str, str], check: str) -> str | None:
     build(root, files)
     data = score(root)
@@ -535,6 +558,7 @@ SPECIAL = [
     ("symlinked CLAUDE.md outside repo", symlinked_instructions),
     ("skill frontmatter is documented keys only", skill_frontmatter),
     ("external state cites all three fields", external_state_citation),
+    ("pyyaml in the user site is visible", user_site_pyyaml),
     ("pyyaml missing: report wording", yaml_missing_report),
     ("pyyaml missing: score and note", yaml_missing_score),
     ("instruction file cites a line that exists", empty_instruction_citation),
