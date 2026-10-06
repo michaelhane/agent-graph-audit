@@ -1,0 +1,420 @@
+#!/usr/bin/env python3
+"""Regression evals for score_setup.py.
+
+Every case below is a bypass or bug found during review. Each builds a tiny
+fixture folder, scores it, and checks the result. Exit code 0 means all pass.
+
+    python3 evals/run_evals.py
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+SCORER = Path(__file__).resolve().parent.parent / "scripts" / "score_setup.py"
+
+# A README that names every keyword. Scores high on text, has no runner.
+STUFFED = (
+    "CLAUDE.md definition of done. npm test. worktree. allowlist. trace. timeout.\n"
+    "claim. max_attempts 3. fail closed. same error twice. per job.\n"
+    "nodes: intake -> triage -> fix -> review -> gate -> planner. tests passed. job_id status attempt.\n"
+    "human gate. ignore. bounded. join.\n"
+)
+STUFFED_FILES = {"README.md": STUFFED, ".gitignore": ".env\n"}
+
+REAL_WF = (
+    "on: push\njobs:\n  fix:\n    runs-on: ubuntu-latest\n"
+    "    steps:\n      - run: npm test\n"
+)
+
+
+def with_stuffed(extra: dict[str, str]) -> dict[str, str]:
+    return {**STUFFED_FILES, **extra}
+
+
+def gate_case(line: str) -> dict[str, str]:
+    return {"README.md": f"{line}\nWe have a human gate.\n"}
+
+
+# (name, files, expectations)
+# Expectation keys: final, running, harness, loop, graph, and pass:<check>/fail:<check>.
+CASES = [
+    # Baselines
+    ("empty", {}, {"final": 0}),
+    ("one-line readme", {"README.md": "agents are cool\n"},
+     {"final": 3, "harness": 10, "loop": 0, "graph": 0}),
+    ("stuffed readme hits claim ceiling", STUFFED_FILES,
+     {"final": 69, "running": False, "loop": 92}),
+
+    # Runner detection bypasses
+    ("empty state.json", with_stuffed({"state.json": "{}"}), {"final": 69, "running": False}),
+    ("keys as text", with_stuffed({"state.json": '{"note": "job_id status attempt"}'}),
+     {"final": 69, "running": False}),
+    ("null record", with_stuffed({"state.json": '{"job_id": null, "status": null, "attempt": null}'}),
+     {"final": 69, "running": False}),
+    ("workflow without jobs", with_stuffed({"workflow.yml": "name: x\non: push\n"}),
+     {"final": 69, "running": False}),
+    ("comment mentions steps", with_stuffed({"workflow.yml": "name: x\n# TODO add steps: later\n"}),
+     {"final": 69, "running": False}),
+
+    # True positives
+    ("real state record",
+     with_stuffed({"state.json": '[{"job_id":"j1","status":"failed","attempt":1}]'}),
+     {"final": 97, "running": True}),
+    ("real workflow", with_stuffed({".github/workflows/agent.yml": REAL_WF}),
+     {"final": 97, "running": True}),
+
+    # Single-check bugs
+    ("verifier word alone", {"README.md": "The verifier is a single word here.\n"},
+     {"fail:verify command": True, "fail:evidence verify": True}),
+    ("readme mentions .env, gitignore does not",
+     {"README.md": "Copy .env.example to .env\n", ".gitignore": "node_modules\n"},
+     {"fail:secret ignore": True}),
+    ("shared dirty tree is not isolation",
+     {"README.md": "Two jobs share one branch, so we get a shared dirty tree.\n"},
+     {"fail:work isolation": True, "fail:isolated workspace": True}),
+
+    # Human gate: must fail
+    ("gate: auto-merge", gate_case("The merge node uses auto-merge when tests pass."), {"fail:human gate": True}),
+    ("gate: automerge", gate_case("Uses automerge."), {"fail:human gate": True}),
+    ("gate: auto merge", gate_case("Uses auto merge."), {"fail:human gate": True}),
+    ("gate: auto-merged", gate_case("PRs are auto-merged on green."), {"fail:human gate": True}),
+    ("gate: auto-merges", gate_case("The bot auto-merges PRs."), {"fail:human gate": True}),
+    ("gate: auto-merging", gate_case("Auto-merging is enabled."), {"fail:human gate": True}),
+    ("gate: merge --auto", gate_case("Run gh pr merge --auto."), {"fail:human gate": True}),
+    ("gate: merge <n> --auto --squash", gate_case("Run gh pr merge 42 --auto --squash."), {"fail:human gate": True}),
+    ("gate: merge --squash --auto", gate_case("Run gh pr merge --squash --auto."), {"fail:human gate": True}),
+    ("gate: enable-auto-merge", gate_case("enable-auto-merge on green."), {"fail:human gate": True}),
+    ("gate: never auto-merge (fail closed)", gate_case("We never auto-merge."), {"fail:human gate": True}),
+    # Spellings that slipped past the word-boundary pattern (review item H5).
+    ("gate: allow_auto_merge key", gate_case("allow_auto_merge: true"), {"fail:human gate": True}),
+    ("gate: renovate platformAutomerge", gate_case('{"platformAutomerge": true}'), {"fail:human gate": True}),
+    ("gate: graphql enablePullRequestAutoMerge",
+     gate_case("mutation { enablePullRequestAutoMerge(input: $i) { clientMutationId } }"),
+     {"fail:human gate": True}),
+    ("gate: --auto on a continuation line", gate_case('gh pr merge "$PR" \\\n  --auto --squash'),
+     {"fail:human gate": True}),
+    ("gate: --auto two continuations down", gate_case('gh pr merge \\\n  "$PR" \\\n  --squash --auto'),
+     {"fail:human gate": True}),
+    ("gate: allow_auto_merge false (fail closed)", gate_case("allow_auto_merge: false"),
+     {"fail:human gate": True}),
+
+    # Human gate: must pass
+    ("gate: no auto-merge", gate_case("No auto-merge."), {"pass:human gate": True}),
+    ("gate: plain human gate", {"README.md": "We have a human gate.\n"}, {"pass:human gate": True}),
+    ("gate: mergeable is not merge --auto", gate_case("Check that the PR is mergeable automatically."),
+     {"pass:human gate": True}),
+    ("gate: continued merge without --auto", gate_case('gh pr merge "$PR" \\\n  --squash'),
+     {"pass:human gate": True}),
+    ("gate: --auto on a separate command", gate_case("gh pr merge 42 --squash\nnpm run release -- --auto"),
+     {"pass:human gate": True}),
+    ("gate: no-auto-merge label", gate_case("Label PRs no-auto-merge."), {"pass:human gate": True}),
+
+    # Secrets: must fail
+    ("secret: unquoted .env", {"README.md": "readme\n", ".env": "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz\n"},
+     {"fail:no inline secrets": True}),
+    ("secret: json api_key", {"config.json": '{"api_key": "sk-proj-abcdefghijklmnopqrstuvwxyz"}\n'},
+     {"fail:no inline secrets": True}),
+    ("secret: SECRET_KEY", {"config.py": 'SECRET_KEY = "django-insecure-abcdefghijklmnopqrstuvwxyz"\n'},
+     {"fail:no inline secrets": True}),
+    ("secret: aws slash", {"config.py": 'aws_secret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"\n'},
+     {"fail:no inline secrets": True}),
+    ("secret: jwt dots", {"config.py": 'token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc"\n'},
+     {"fail:no inline secrets": True}),
+
+    ("secret: .envrc export",
+     {"README.md": "readme\n", ".envrc": "export OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz\n"},
+     {"fail:no inline secrets": True}),
+    ("secret: kwarg literal", {"client.py": 'client = OpenAI(api_key="sk-proj-abcdefghijklmnopqrstuvwxyz")\n'},
+     {"fail:no inline secrets": True}),
+
+    # Secrets: must pass
+    ("secret: placeholder", {".env.example": 'API_KEY="your-api-key-here"\n'},
+     {"pass:no inline secrets": True}),
+    # Safe patterns the first h1-h4 patch flagged. Each one must pass.
+    ("secret: js process.env", {"client.js": "const apiKey = process.env.OPENAI_API_KEY;\n"},
+     {"pass:no inline secrets": True}),
+    ("secret: py os.environ.get", {"client.py": 'api_key = os.environ.get("OPENAI_API_KEY")\n'},
+     {"pass:no inline secrets": True}),
+    ("secret: settings lookup", {"views.py": "secret_key = settings.SECRET_KEY\n"},
+     {"pass:no inline secrets": True}),
+    ("secret: tokenizer", {"model.py": 'tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")\n'},
+     {"pass:no inline secrets": True}),
+    ("secret: file path", {"auth.py": 'token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"\n'},
+     {"pass:no inline secrets": True}),
+    ("secret: type annotation", {"models.py": "    access_token: AccessTokenResponse\n"},
+     {"pass:no inline secrets": True}),
+    ("secret: placeholder underscores", {".env.example": "API_KEY=your_api_key_here\n"},
+     {"pass:no inline secrets": True}),
+    ("secret: placeholder caps", {".env.example": 'API_KEY="YOUR_API_KEY_HERE"\n'},
+     {"pass:no inline secrets": True}),
+    ("secret: placeholder sk-xxxx", {".env.example": "OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxx\n"},
+     {"pass:no inline secrets": True}),
+    ("secret: env var name as value", {"config.json": '{"api_key_env": "ANTHROPIC_API_KEY"}\n'},
+     {"pass:no inline secrets": True}),
+    ("secret: url is not a value", {"auth.py": 'token_url = "https://oauth2.googleapis.com/token"\n'},
+     {"pass:no inline secrets": True}),
+    ("secret: actions secret ref", {"ci.yml": "token: ${{ secrets.GITHUB_TOKEN }}\n"},
+     {"pass:no inline secrets": True}),
+    # Negation (review item H6): a negated or shared mention is not evidence.
+    ("neg: share a single worktree", {"README.md": "All agents share a single worktree and one dirty tree.\n"},
+     {"fail:work isolation": True, "fail:isolated workspace": True}),
+    ("neg: do not use a worktree", {"README.md": "We do not use a worktree.\n"},
+     {"fail:work isolation": True, "fail:isolated workspace": True}),
+    ("neg: worktrees are not used", {"README.md": "Worktrees are not used.\n"},
+     {"fail:work isolation": True, "fail:isolated workspace": True}),
+    ("neg: unbounded retries", {"README.md": "The loop has unbounded retries.\n"},
+     {"fail:bounded cycle": True}),
+    ("neg: no max attempts", {"README.md": "There is no max attempts setting; it retries forever.\n"},
+     {"fail:attempt cap": True, "fail:bounded cycle": True}),
+    ("neg: no allowlist, no timeout", {"README.md": "There is no allowlist and we run without a timeout.\n"},
+     {"fail:tool boundary": True, "fail:budget": True}),
+    ("neg: never claim", {"README.md": "Workers never claim a job.\n"}, {"fail:claim": True}),
+    ("neg: don't wait for", {"README.md": "Nodes don't wait for siblings.\n"}, {"fail:join": True}),
+    # Negation must not swallow correct sentences.
+    ("neg ok: its own worktree", {"README.md": "Each job gets its own worktree.\n"},
+     {"pass:work isolation": True, "pass:isolated workspace": True}),
+    ("neg ok: one worktree per job", {"README.md": "One worktree per job.\n"},
+     {"pass:work isolation": True, "pass:isolated workspace": True}),
+    ("neg ok: single worktree per job", {"README.md": "A single worktree per job; jobs never share one.\n"},
+     {"pass:work isolation": True, "pass:isolated workspace": True}),
+    ("neg ok: negation in another clause", {"README.md": "Never share state, use a worktree per job.\n"},
+     {"pass:work isolation": True, "pass:isolated workspace": True}),
+    ("neg ok: max 3 attempts", {"README.md": "Max 3 attempts per job.\n"}, {"pass:attempt cap": True}),
+    ("neg ok: typed max_attempts", {"loop.py": "    max_attempts: int = 3\n"}, {"pass:attempt cap": True}),
+    ("neg ok: edge back after not", {"README.md": "If tests do not pass, edge back to fix.\n"},
+     {"pass:conditional edges": True}),
+    ("neg ok: bounded by max_attempts", {"README.md": "Retries are bounded by max_attempts: 3.\n"},
+     {"pass:bounded cycle": True, "pass:attempt cap": True}),
+
+    # Prose words in code, and common words in docs (review item H7).
+    ("code: str.join is not a join", {"util.py": 'path = ", ".join(parts)\n'}, {"fail:join": True}),
+    ("code: type ignore is not an outcome", {"util.py": "x = foo()  # type: ignore\n"},
+     {"fail:ignore outcome": True}),
+    ("config: dependabot ignore key", {"dependabot.yml": "ignore:\n  - dependency-name: lodash\n"},
+     {"fail:ignore outcome": True}),
+    ("docs: edge cases are not edges", {"CLAUDE.md": "Always handle edge cases.\n"},
+     {"fail:conditional edges": True}),
+    ("docs: common words are not nodes",
+     {"CLAUDE.md": "Fix bugs, ask for review, and respect the quality gate.\n"},
+     {"fail:named nodes": True}),
+    ("docs: Node.js is not graph context",
+     {"CLAUDE.md": "Use Node 20. Fix lint, request review, pass the gate.\n"},
+     {"fail:named nodes": True}),
+    ("skip: vendor folder", {"CLAUDE.md": "Be helpful.\n", "vendor/somelib/client.py": (
+        '"/".join(parts)  # type: ignore\ndef call(retry=3, timeout=30):\n'
+        "    # raise on non-zero exit code; trace each tool call\n")},
+     {"final": 8, "loop": 0, "graph": 0}),
+    ("skip: venv by pyvenv.cfg", {"CLAUDE.md": "Be helpful.\n", "py312/pyvenv.cfg": "home = /usr/bin\n",
+                                  "py312/lib/x.py": "trace timeout join retry 3 non-zero worktree\n"},
+     {"final": 8, "loop": 0, "graph": 0}),
+    ("skip: license text says ANY CLAIM", {"LICENSE.md": (
+        "IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES\n")},
+     {"fail:claim": True}),
+    ("code: comments are not loop evidence", {"util.py": (
+        "# non-zero in the result\n# Same error message as for issubclass(1, int).\n"
+        "# Year is bounded this way\n")},
+     {"fail:fail closed": True, "fail:repeated error exit": True, "fail:bounded cycle": True}),
+    ("code: Makefile join.h is not a join", {"Makefile": "SRC = Objects/stringlib/join.h\n"},
+     {"fail:join": True}),
+    # Real graph evidence must still count.
+    ("graph: recursion_limit in code", {"run.py": 'graph.invoke(state, {"recursion_limit": 25})\n'},
+     {"pass:bounded cycle": True}),
+    ("graph: join at end of sentence", {"README.md": "Both branches meet at a join.\n"}, {"pass:join": True}),
+    ("graph: arrows name nodes", {"README.md": "intake --> triage --> fix\n"}, {"pass:named nodes": True}),
+    ("graph: backticked nodes", {"README.md": "The `planner`, `executor` and `verifier` run in order.\n"},
+     {"pass:named nodes": True}),
+    ("graph: langgraph code", {"graph.py": (
+        'g.add_node("plan", plan)\ng.add_node("act", act)\ng.add_node("check", check)\n'
+        'g.add_conditional_edges("check", route)\ng.add_edge(["plan", "act"], "check")\n')},
+     {"pass:named nodes": True, "pass:conditional edges": True, "pass:join": True}),
+    ("graph: ignored status value", {"state.json": '[{"job_id": "j1", "status": "ignored", "attempt": 0}]\n'},
+     {"pass:ignore outcome": True}),
+    ("graph: workflow needs two jobs", {".github/workflows/ci.yml": (
+        "on: push\njobs:\n  merge:\n    needs: [build, test]\n    runs-on: ubuntu-latest\n"
+        "    steps:\n      - run: echo ok\n")},
+     {"pass:join": True}),
+    ("graph: conditional edge in docs", {"README.md": "Conditional edge: review -> gate when tests pass.\n"},
+     {"pass:conditional edges": True}),
+
+    # Found in Python's own stdlib (email/_header_value_parser.py) during review.
+    ("secret: descriptor key token_type", {"parser.py": "    token_type = 'unstructured'\n"},
+     {"pass:no inline secrets": True}),
+    ("secret: descriptor key camelCase", {"config.json": '{"tokenType": "bearer-access-token"}\n'},
+     {"pass:no inline secrets": True}),
+]
+
+
+def build(root: Path, files: dict[str, str]) -> None:
+    for rel, text in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+
+def score(root: Path) -> dict:
+    out = subprocess.run(
+        [sys.executable, "-I", str(SCORER), "--target", str(root), "--json"],
+        capture_output=True, text=True, check=True,
+    )
+    return json.loads(out.stdout)
+
+
+def check_state(data: dict, name: str) -> bool | None:
+    for layer in ("harness", "loop", "graph"):
+        for check in data[layer]["checks"]:
+            if check["name"] == name:
+                return check["ok"]
+    return None
+
+
+def evaluate(data: dict, expect: dict) -> list[str]:
+    errors = []
+    actual = {
+        "final": data["composite"]["score"],
+        "running": data["running"],
+        "harness": data["harness"]["score"],
+        "loop": data["loop"]["score"],
+        "graph": data["graph"]["score"],
+    }
+    for key, want in expect.items():
+        if key in actual:
+            if actual[key] != want:
+                errors.append(f"{key}: want {want}, got {actual[key]}")
+            continue
+        mode, check = key.split(":", 1)
+        ok = check_state(data, check)
+        if ok is None:
+            errors.append(f"unknown check: {check}")
+        elif mode == "pass" and not ok:
+            errors.append(f"{check}: want pass, got fail")
+        elif mode == "fail" and ok:
+            errors.append(f"{check}: want fail, got pass")
+    return errors
+
+
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+
+
+class Skip(Exception):
+    """The platform cannot build this fixture (for example, no symlinks)."""
+
+
+def repo_under(dirname: str):
+    """A repo inside a folder that is in SKIP_DIRS must still scan."""
+    def run(tmp: Path) -> list[str]:
+        root = tmp / dirname / "repo"
+        build(root, STUFFED_FILES)
+        data = score(root)
+        if data["files_scanned"] == 0 or data["composite"]["score"] == 0:
+            return [f"score {data['composite']['score']}, files {data['files_scanned']}"]
+        return []
+    return f"repo under {dirname}/", run
+
+
+def installed_skill(label: str, dest_rel: str, name_line: str | None = None, only_core: bool = False):
+    """Installing this skill in a repo must not change that repo's score."""
+    def run(tmp: Path) -> list[str]:
+        plain = tmp / "plain"
+        build(plain, {"CLAUDE.md": "Ship the feature.\n"})
+        base = score(plain)
+        repo = tmp / "repo"
+        build(repo, {"CLAUDE.md": "Ship the feature.\n"})
+        dest = repo / dest_rel
+        if only_core:
+            for rel in ("SKILL.md", "scripts/score_setup.py", "references/rubric.md", "references/failure-modes.md"):
+                build(dest, {rel: (SKILL_ROOT / rel).read_text(encoding="utf-8")})
+        else:
+            shutil.copytree(SKILL_ROOT, dest, ignore=shutil.ignore_patterns("__pycache__", ".git"))
+        if name_line:
+            skill_md = dest / "SKILL.md"
+            text = skill_md.read_text(encoding="utf-8")
+            skill_md.write_text(text.replace("name: agent-graph-audit", name_line, 1), encoding="utf-8")
+        data = score(repo)
+        errors = []
+        if data["composite"]["score"] != base["composite"]["score"] or data["files_scanned"] != 1:
+            errors.append(
+                f"base {base['composite']['score']}%, with skill {data['composite']['score']}%, "
+                f"files {data['files_scanned']}"
+            )
+        if data.get("skipped_skill_dirs") != [dest_rel]:
+            errors.append(f"skipped_skill_dirs {data.get('skipped_skill_dirs')}, want [{dest_rel!r}]")
+        return errors
+    return f"installed skill: {label}", run
+
+
+def self_scan(tmp: Path) -> list[str]:
+    """Scoring this skill's own folder reports it as skipped instead of scoring its docs."""
+    data = score(SKILL_ROOT)
+    if data["files_scanned"] != 0 or data.get("skipped_skill_dirs") != ["."]:
+        return [f"files {data['files_scanned']}, skipped {data.get('skipped_skill_dirs')}"]
+    return []
+
+
+def symlinked_instructions(tmp: Path) -> list[str]:
+    """A CLAUDE.md symlinked to a file outside the repo is still read."""
+    shared = tmp / "shared"
+    build(shared, {"CLAUDE.md": "definition of done: npm test passes\n"})
+    repo = tmp / "repo"
+    build(repo, {"README.md": "hi\n"})
+    try:
+        os.symlink(shared / "CLAUDE.md", repo / "CLAUDE.md")
+    except (OSError, NotImplementedError):
+        raise Skip("symlinks not available")
+    ok = check_state(score(repo), "instruction file")
+    return [] if ok else ["instruction file: want pass, got fail"]
+
+
+SPECIAL = [
+    *(repo_under(d) for d in ("artifacts", "build", "dist", "venv", "node_modules")),
+    installed_skill("core files", ".claude/skills/agent-graph-audit", only_core=True),
+    installed_skill("full copy", ".claude/skills/agent-graph-audit"),
+    installed_skill("quoted name", ".claude/skills/agent-graph-audit", name_line='name: "agent-graph-audit"'),
+    installed_skill("renamed copy", ".claude/skills/graph-audit-v2", name_line="name: agent-graph-audit-v2"),
+    installed_skill("plugin path", ".claude/plugins/x/skills/agent-graph-audit"),
+    ("self scan reports skip", self_scan),
+    ("symlinked CLAUDE.md outside repo", symlinked_instructions),
+]
+
+
+def main() -> int:
+    failed = 0
+    skipped = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, (name, files, expect) in enumerate(CASES):
+            root = Path(tmp) / f"case{i}"
+            root.mkdir()
+            build(root, files)
+            errors = evaluate(score(root), expect)
+            if errors:
+                failed += 1
+                print(f"FAIL  {name}: " + "; ".join(errors))
+            else:
+                print(f"ok    {name}")
+        for i, (name, run) in enumerate(SPECIAL):
+            root = Path(tmp) / f"special{i}"
+            root.mkdir()
+            try:
+                errors = run(root)
+            except Skip as why:
+                skipped += 1
+                print(f"skip  {name}: {why}")
+                continue
+            if errors:
+                failed += 1
+                print(f"FAIL  {name}: " + "; ".join(errors))
+            else:
+                print(f"ok    {name}")
+    total = len(CASES) + len(SPECIAL) - skipped
+    print(f"\n{total - failed}/{total} passed" + (f" ({skipped} skipped)" if skipped else ""))
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
