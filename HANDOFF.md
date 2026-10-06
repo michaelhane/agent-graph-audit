@@ -77,11 +77,53 @@ Scoring this folder returns 0% on purpose (see decision 6).
 6. **Self-skip.** Any folder that is this skill is skipped, including the target itself. That's why scoring this repo returns 0% with a "Skipped" note.
 7. **Secrets.** A quoted literal of 12+ characters counts anywhere; an unquoted value only in env files. Paths, placeholders, env-var names and descriptor keys are ignored. It is a pattern check, not a secret scanner. Citations give `file:line`, never the value.
 
+8. **Dutch counts.** Evidence written in Dutch counts the same as English, for gate, fail-closed and negation words. (Micha, 2026-10-06)
+9. **A config gate counts.** A review-gate config with an ask or confirm mode is human-gate evidence, and stronger than a README sentence. Auto-merge anywhere still fails the gate (decision 3). (Micha, 2026-10-06)
+
 ## 6. Open work, in suggested order
 
 Each item gives a reproduction case to turn into an eval fixture first (it must fail on the current code), then the expected result.
 
-Nothing open from the v0.2 list. Remaining ideas are under Known limits.
+Field-test round 1 (2026-10-06): 6 real repos, every citation checked by hand. Of the passing checks, 54 were false passes and 35 true passes; there were 7 false fails. The causes are listed below in suggested order. Repo names stay out of this file.
+
+### F1. Scan scope is too wide
+- `.claude/worktrees/<name>/` copies of the repo are read, so one sentence gets cited several times. Folders that `.gitignore` lists (caches, browser snapshots, graph caches) are read too. In one large repo the scorer scanned 20,881 files where git tracks 2,539, and the run took 22 minutes.
+- Fixture: `.gitignore` with `cache/`, plus `cache/notes.md` containing "human gate" and "a join node". Also `.claude/worktrees/w1/CLAUDE.md`. Expected: neither file is cited, and `files_scanned` counts neither.
+- Fix: skip `.claude/worktrees/`, and skip the paths `.gitignore` ignores (simple patterns are enough; no full gitignore engine).
+
+### F3. The weakest hit is cited
+- `.gitignore` containing `.pytest_cache/` passes "verify command" and "evidence verify", even when `pytest` sits in `CLAUDE.md`. Fixture: a `.gitignore` with only `.pytest_cache/`. Expected: verify command fails.
+- "Instruction file" cites a plan doc while `CLAUDE.md` exists. Expected: the citation prefers `CLAUDE.md`/`AGENTS.md`.
+
+### F7. Windows report encoding
+On Windows, stdout is written as cp1252, so `—` becomes byte `0x97`. Fixture: run the scorer without `PYTHONIOENCODING` and decode stdout as UTF-8. Fix: reconfigure stdout to UTF-8.
+
+### F2. Bare words with another meaning (one job per check)
+Each line below is a README sentence that passes today and should fail.
+- claim: "That is a testable claim."
+- conditional edges: "The graph has 3397 edges." and "Edge-cache is on."
+- join: "`names.join(', ')`" in a code snippet in a `.md`.
+- ignore outcome: "Run `git check-ignore`." and "Use `--ignore=tests/slow`."
+- budget: "`setTimeout(fn, 100)`" and "Screenshots sometimes time out."
+- repeated error exit: "It crashed twice last week."
+- trace: "Trace the bug back to the parser."
+- bounded cycle: "Cost is bounded per turn."
+- attempt cap: `var attempts = 0` (no bound).
+- fail closed: "Report a non-zero count."
+
+### F4. Dutch evidence (decision 8)
+- human gate: "zonder akkoord", "wacht op akkoord".
+- fail closed: "faalt dicht", "stop bij de eerste fout".
+- The negation window also needs Dutch negators: niet, geen, nooit, zonder.
+
+### F5. Config gate (decision 9)
+A review-gate config such as `hooks/review-gate.json` with `"mode": "ask"` counts as a human gate.
+
+### F8. Speed on large repos
+Measure again after F1. Target: under 10 s on 3,000 tracked files.
+
+### F6. Secret check: Dutch key names
+`wachtwoord: <literal>` in Markdown is not flagged today. Give the citation only, never the value.
 
 ### Known limits (accepted for now, documented in README)
 
