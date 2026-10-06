@@ -335,9 +335,11 @@ def instruction_cite(files: list[tuple[str, list[str]]]) -> str | None:
     found = cite(files, r"definition of done")
     if found:
         return found
-    for name, _ in files:
+    for name, lines in files:
         if re.search(r"(AGENTS|CLAUDE)\.md$", name):
-            return f"{name}:1"
+            for i, line in enumerate(lines, start=1):
+                if line.strip():
+                    return f"{name}:{i}"  # an empty file is not an instruction file
     return None
 
 

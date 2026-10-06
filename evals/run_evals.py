@@ -265,6 +265,11 @@ CASES = [
     ("graph: conditional edge in docs", {"README.md": "Conditional edge: review -> gate when tests pass.\n"},
      {"pass:conditional edges": True}),
 
+    # Instruction file and external state (review items D3, D4).
+    ("instruction: empty CLAUDE.md", {"CLAUDE.md": ""}, {"fail:instruction file": True}),
+    ("instruction: whitespace-only AGENTS.md", {"AGENTS.md": "\n  \n"}, {"fail:instruction file": True}),
+    ("instruction: CLAUDE.md with text", {"CLAUDE.md": "\nBe careful.\n"}, {"pass:instruction file": True}),
+
     # Runner detection is GitHub Actions only (review item M2, smaller option).
     ("runner: langgraph path is not a workflow", with_stuffed({"langgraph/pipeline.yml": REAL_WF}),
      {"final": 69, "running": False}),
@@ -440,6 +445,22 @@ def skill_frontmatter(tmp: Path) -> list[str]:
     return errors
 
 
+def citation_of(root: Path, files: dict[str, str], check: str) -> str | None:
+    build(root, files)
+    data = score(root)
+    for layer in ("harness", "loop", "graph"):
+        for c in data[layer]["checks"]:
+            if c["name"] == check:
+                return c["citation"]
+    return None
+
+
+def empty_instruction_citation(tmp: Path) -> list[str]:
+    """An instruction file cites a line that exists (item D3)."""
+    got = citation_of(tmp, {"CLAUDE.md": "\n\nBe careful.\n"}, "instruction file")
+    return [] if got == "CLAUDE.md:3" else [f"citation {got!r}, want 'CLAUDE.md:3'"]
+
+
 SPECIAL = [
     *(repo_under(d) for d in ("artifacts", "build", "dist", "venv", "node_modules")),
     installed_skill("core files", ".claude/skills/agent-graph-audit", only_core=True),
@@ -450,6 +471,7 @@ SPECIAL = [
     ("self scan reports skip", self_scan),
     ("symlinked CLAUDE.md outside repo", symlinked_instructions),
     ("skill frontmatter is documented keys only", skill_frontmatter),
+    ("instruction file cites a line that exists", empty_instruction_citation),
 ]
 
 
