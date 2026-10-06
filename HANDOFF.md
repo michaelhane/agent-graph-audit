@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **140/140** on Python 3.13.16 with PyYAML 6.0.3.
+**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **141/141** on Python 3.13.16 with PyYAML 6.0.3.
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 140 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 141 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 140/140
+python3 evals/run_evals.py                       # expect 141/141
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -63,6 +63,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | D5 | With PyYAML missing the report no longer contradicts its own cap line: the note now says a workflow file was found but not parsed, so the runner is "unconfirmed" (it used to say "do not read this as a missing runner"). The JSON `runner_note` is unchanged. New evals cover the PyYAML-missing path (workflow file, state file, no workflow). |
 | L2 | The evals run the scorer with `-E -P` instead of `-I`, so a PyYAML from `pip install --user` is found. (HANDOFF suggested `-s -E`, but `-s` is the flag that hides the user site, so `-P` is used instead.) |
 | L4 | A scorer crash now fails the cases that hit it (`ScorerCrash`) instead of aborting the eval run. `EVAL_SCORER` swaps in another scorer; only the crash check uses it. |
+| L5 | `instruction file`, `verify command` and `secret ignore` compute their citation once each in `harness_checks`. |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -80,7 +81,6 @@ Each item gives a reproduction case to turn into an eval fixture first (it must 
 
 ### Docs, output and hygiene
 
-- **L5:** `verify command`, `instruction file` and `secret ignore` still compute their citation twice (minor speed issue).
 - **L6:** the `.gitignore` check matches any `\.env`, including `.envrc` and the un-ignore line `!.env.example`.
 
 **Eval gaps:** no case where the graph cap (`loop + 20`) or the harness-under-40 cap actually changes the result, and no case for the PyYAML-missing path.

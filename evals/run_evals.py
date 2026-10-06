@@ -512,6 +512,36 @@ def yaml_missing_score(tmp: Path) -> list[str]:
     return errors
 
 
+def citations_computed_once(tmp: Path) -> list[str]:
+    """harness_checks computes each citation once (item L5)."""
+    if os.environ.get("EVAL_SCORER"):
+        raise Skip("the scorer is swapped out")
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("score_setup_probe", SCORER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    calls = {"instruction file": 0, "verify command": 0, "secret ignore": 0}
+    real_instruction, real_any, real_named = mod.instruction_cite, mod.cite_any, mod.cite_named
+
+    def instruction(files):
+        calls["instruction file"] += 1
+        return real_instruction(files)
+
+    def cite_any(files, patterns):
+        if patterns == [mod.VERIFY_CMD_RE.pattern]:
+            calls["verify command"] += 1
+        return real_any(files, patterns)
+
+    def cite_named(files, pattern, filename):
+        if filename == ".gitignore":
+            calls["secret ignore"] += 1
+        return real_named(files, pattern, filename)
+
+    mod.instruction_cite, mod.cite_any, mod.cite_named = instruction, cite_any, cite_named
+    mod.harness_checks([("CLAUDE.md", ["npm test"]), (".gitignore", [".env"])])
+    return [f"{name} computed {n} times" for name, n in calls.items() if n != 1]
+
+
 def crash_fails_one_case(tmp: Path) -> list[str]:
     """A scorer crash fails the cases it hits instead of aborting the run (item L4).
 
@@ -587,6 +617,7 @@ SPECIAL = [
     ("symlinked CLAUDE.md outside repo", symlinked_instructions),
     ("skill frontmatter is documented keys only", skill_frontmatter),
     ("external state cites all three fields", external_state_citation),
+    ("harness citations computed once", citations_computed_once),
     ("scorer crash fails one case, not the run", crash_fails_one_case),
     ("pyyaml in the user site is visible", user_site_pyyaml),
     ("pyyaml missing: report wording", yaml_missing_report),

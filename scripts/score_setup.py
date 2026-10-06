@@ -417,6 +417,9 @@ def secret_hit(files: list[tuple[str, list[str]]]) -> str | None:
 
 def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     found = secret_hit(files)
+    instruction = instruction_cite(files)
+    verify = cite_any(verify_files(files), [VERIFY_CMD_RE.pattern])
+    secret_ignore = cite_named(files, r"\.env", ".gitignore")
     scanned = len(files) > 0
     secret_ok = scanned and found is None
     secret_cite = f"scanned:{len(files)}" if secret_ok else found
@@ -430,25 +433,25 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
         (
             "instruction file",
             15,
-            instruction_cite(files) is not None,
+            instruction is not None,
             "AGENTS.md or CLAUDE.md, or an explicit definition of done",
-            instruction_cite(files),
+            instruction,
             None,
         ),
         (
             "verify command",
             15,
-            cite_any(verify_files(files), [VERIFY_CMD_RE.pattern]) is not None,
+            verify is not None,
             "A named test, lint, or typecheck command",
-            cite_any(verify_files(files), [VERIFY_CMD_RE.pattern]),
+            verify,
             None,
         ),
         (
             "secret ignore",
             10,
-            cite_named(files, r"\.env", ".gitignore") is not None,
+            secret_ignore is not None,
             ".gitignore itself mentions .env",
-            cite_named(files, r"\.env", ".gitignore"),
+            secret_ignore,
             None,
         ),
         (
