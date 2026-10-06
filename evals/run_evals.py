@@ -603,9 +603,15 @@ def user_site_pyyaml(tmp: Path) -> list[str]:
     """
     home = tmp / "home"
     home.mkdir()
-    env = {**os.environ, "HOME": str(home)}
-    site = subprocess.run([sys.executable, "-c", "import site; print(site.getusersitepackages())"],
+    # The user site follows HOME on POSIX and APPDATA on Windows. PYTHONUSERBASE would be
+    # ignored by the scorer's -E, so it is dropped rather than set.
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONUSERBASE"}
+    env.update({"HOME": str(home), "APPDATA": str(home)})
+    site = subprocess.run([sys.executable, *SCORER_FLAGS, "-c", "import site; print(site.getusersitepackages())"],
                           capture_output=True, text=True, check=True, env=env).stdout.strip()
+    # Never write the stub outside this case's temp folder: it would shadow the real PyYAML.
+    if not Path(site).resolve().is_relative_to(tmp.resolve()):
+        return [f"user site {site} is outside the eval's temp folder; stub not written"]
     build(Path(site), {"yaml.py": "def safe_load(text):\n    return {'jobs': {'x': {'runs-on': 'u'}}}\n"})
     repo = tmp / "repo"
     build(repo, {".github/workflows/x.yml": "not: a workflow\n"})
