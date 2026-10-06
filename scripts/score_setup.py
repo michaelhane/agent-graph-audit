@@ -53,6 +53,12 @@ CODE_NAMES = {"Makefile", "Dockerfile"}
 # Legal boilerplate is never evidence ("LIABLE FOR ANY CLAIM" is in the MIT license).
 LICENSE_STEMS = {"LICENSE", "LICENCE", "COPYING", "NOTICE"}
 
+# State files are parsed whole: a real one is often over 200 KB, and a cut file is not valid JSON.
+STATE_NAMES = {"state.json", "jobs.json", "state.jsonl", "jobs.jsonl"}
+MAX_STATE_CHARS = 50_000_000
+# A state file may wrap its records one level down: {"jobs": [...]}.
+STATE_WRAPPER_KEYS = ("jobs", "records", "items")
+
 TEXT_SUFFIXES = {
     ".md",
     ".txt",
@@ -148,7 +154,7 @@ def is_scanned_file(path: Path) -> bool:
     name = path.name
     if name in {".env", ".envrc"} or name.startswith(".env."):
         return True
-    return path.suffix.lower() in TEXT_SUFFIXES or name in {
+    return path.suffix.lower() in TEXT_SUFFIXES or name in STATE_NAMES or name in {
         "AGENTS.md",
         "CLAUDE.md",
         "Makefile",
@@ -221,8 +227,9 @@ def read_files(root: Path, skipped: list[str] | None = None) -> list[tuple[str, 
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        if len(text) > 200_000:
-            text = text[:200_000]
+        limit = MAX_STATE_CHARS if path.name in STATE_NAMES else 200_000
+        if len(text) > limit:
+            text = text[:limit]
         rel = (path.relative_to(root) if path != root else Path(path.name)).as_posix()
         files.append((rel, text.splitlines()))
     return files
@@ -690,11 +697,16 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
 STATUSES = {"open", "claimed", "in_progress", "running", "passed", "failed", "ignored", "escalated", "done"}
 
 
-def state_record_ok(node) -> bool:
+def state_record_ok(node, wrapped: bool = False) -> bool:
     if isinstance(node, list):
-        return any(state_record_ok(item) for item in node)
+        return any(state_record_ok(item, wrapped) for item in node)
     if not isinstance(node, dict):
         return False
+    if not wrapped:
+        for key in STATE_WRAPPER_KEYS:
+            inner = node.get(key)
+            if isinstance(inner, list) and state_record_ok(inner, True):
+                return True
     job_id = node.get("job_id")
     status = node.get("status")
     attempt = node.get("attempt")
@@ -709,17 +721,20 @@ def state_record_ok(node) -> bool:
 
 def state_file_ready(files: list[tuple[str, list[str]]]) -> bool:
     for fname, lines in files:
-        if Path(fname).name not in {"state.json", "jobs.json"}:
+        if Path(fname).name not in STATE_NAMES:
             continue
         raw = "\n".join(lines).strip()
         if not raw:
             continue
         try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+            if fname.endswith(".jsonl"):
+                data = [json.loads(line) for line in lines if line.strip()]
+            else:
+                data = json.loads(raw)
+            if state_record_ok(data):
+                return True
+        except (ValueError, RecursionError):  # JSONDecodeError is a ValueError
             continue
-        if state_record_ok(data):
-            return True
     return False
 
 

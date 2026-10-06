@@ -70,6 +70,28 @@ CASES = [
     ("real workflow", with_stuffed({".github/workflows/agent.yml": REAL_WF}),
      {"final": 97, "running": True}),
 
+    # Real state files (review item M1, with L1).
+    ("state: 324 KB file is parsed in full", with_stuffed({"state.json": json.dumps(
+        [{"job_id": f"job-{n:05d}", "status": "passed", "attempt": 1, "note": "x" * 40} for n in range(3000)])}),
+     {"final": 97, "running": True}),
+    ("state: jobs wrapper", with_stuffed({"state.json": json.dumps(
+        {"jobs": [{"job_id": "j1", "status": "failed", "attempt": 1}]})}),
+     {"final": 97, "running": True}),
+    ("state: records wrapper", with_stuffed({"jobs.json": json.dumps(
+        {"records": [{"job_id": "j1", "status": "failed", "attempt": 1}]})}),
+     {"final": 97, "running": True}),
+    ("state: items wrapper", with_stuffed({"state.json": json.dumps(
+        {"items": [{"job_id": "j1", "status": "failed", "attempt": 1}]})}),
+     {"final": 97, "running": True}),
+    ("state: jsonl", with_stuffed({"state.jsonl": (
+        '{"job_id": "j1", "status": "failed", "attempt": 1}\n{"job_id": "j2", "status": "open", "attempt": 0}\n')}),
+     {"final": 97, "running": True}),
+    ("state: wrapper with empty records is not a runner", with_stuffed({"state.json": json.dumps(
+        {"jobs": [{"job_id": None, "status": "failed", "attempt": 1}]})}),
+     {"final": 69, "running": False}),
+    ("state: 100k nested brackets does not crash", with_stuffed({"state.json": "[" * 100_000}),
+     {"final": 69, "running": False}),
+
     # Single-check bugs
     ("verifier word alone", {"README.md": "The verifier is a single word here.\n"},
      {"fail:verify command": True, "fail:evidence verify": True}),
