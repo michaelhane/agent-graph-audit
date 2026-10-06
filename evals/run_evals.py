@@ -265,6 +265,20 @@ CASES = [
     ("graph: conditional edge in docs", {"README.md": "Conditional edge: review -> gate when tests pass.\n"},
      {"pass:conditional edges": True}),
 
+    # Runner detection is GitHub Actions only (review item M2, smaller option).
+    ("runner: langgraph path is not a workflow", with_stuffed({"langgraph/pipeline.yml": REAL_WF}),
+     {"final": 69, "running": False}),
+    ("runner: langgraph project is not a runner", with_stuffed({
+        "langgraph.json": '{"graphs": {"agent": "./agent.py:graph"}}',
+        "agent.py": "g = StateGraph(State)\n"}),
+     {"final": 69, "running": False}),
+    ("runner: gitlab ci is not recognised", with_stuffed({".gitlab-ci.yml": REAL_WF}),
+     {"final": 69, "running": False}),
+    ("runner: circleci is not recognised", with_stuffed({".circleci/config.yml": REAL_WF}),
+     {"final": 69, "running": False}),
+    ("runner: workflow.yml still counts", with_stuffed({"workflow.yml": REAL_WF}),
+     {"final": 97, "running": True}),
+
     # Common real config (review item M3). False negatives: these must pass.
     ("config: MAX_RETRIES constant", {"loop.py": "MAX_RETRIES = 3\n"}, {"pass:attempt cap": True}),
     ("config: tenacity stop_after_attempt", {"loop.py": "@retry(stop=stop_after_attempt(3))\ndef call(): ...\n"},

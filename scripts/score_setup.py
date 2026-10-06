@@ -764,6 +764,10 @@ def state_file_ready(files: list[tuple[str, list[str]]]) -> bool:
 
 
 def workflow_files(files: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
+    """GitHub Actions only: .github/workflows/* and files named workflow.yml/.yaml.
+
+    GitLab CI, CircleCI and LangGraph projects are not recognised as runners.
+    """
     found = []
     for item in files:
         fname = item[0]
@@ -772,7 +776,6 @@ def workflow_files(files: list[tuple[str, list[str]]]) -> list[tuple[str, list[s
             ".github/workflows/" in lowered
             or lowered.endswith("workflow.yml")
             or lowered.endswith("workflow.yaml")
-            or "langgraph" in lowered
         ):
             found.append(item)
     return found

@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **123/123** on Python 3.13.16 with PyYAML 6.0.3.
+**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **128/128** on Python 3.13.16 with PyYAML 6.0.3.
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 123 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 128 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 123/123
+python3 evals/run_evals.py                       # expect 128/128
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -57,6 +57,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | D6 | SKILL.md frontmatter keeps only `name` and `description` (`type` and `lifecycle` removed). The `harness-creator` pointer is gone; no other skill is named. |
 | M1, L1 | State files are parsed from the full file (up to 50M characters), `jobs`/`records`/`items` wrappers one level down count, `state.jsonl`/`jobs.jsonl` are read line by line, and a `RecursionError` or `ValueError` on bad JSON is caught instead of crashing the scorer. |
 | M3 | Pass: `MAX_RETRIES = 3`, `stop_after_attempt(3)`, `npm run test`, non-empty `allow`/`deny` in `.claude/settings*.json`, "spend cap". Fail: `pytest>=8.0` dependency lines (and `requirements*.txt`), "token budget of N" as an attempt cap (the `budget of \d` alternative is removed). |
+| M2 | Smaller option: the dead `langgraph` path match is removed and the limit is documented (README, rubric): runner detection is GitHub Actions only (`.github/workflows/*`, `workflow.yml`/`.yaml`). GitLab, CircleCI and LangGraph projects are not recognised; a state file is the way to show a runner for them. A `langgraph/*.yml` file with a `jobs` mapping no longer counts. |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -71,12 +72,6 @@ Scoring this folder returns 0% on purpose (see decision 6).
 ## 6. Open work, in suggested order
 
 Each item gives a reproduction case to turn into an eval fixture first (it must fail on the current code), then the expected result.
-
-### M2. Runner detection
-
-- A LangGraph project (`langgraph.json` with a `graphs` mapping, plus Python using `StateGraph`) never counts as a runner. The `langgraph` path match in `workflow_files` can never pass, because it requires a GitHub-style `jobs:` mapping.
-- GitLab (`.gitlab-ci.yml`) and CircleCI (`.circleci/config.yml`) aren't recognised either (from reading the code).
-- Decide: either add real checks or remove the dead match, and document "GitHub Actions only".
 
 ### Docs, output and hygiene
 

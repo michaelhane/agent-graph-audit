@@ -11,7 +11,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 
 - Graph credit = min(graph, loop + 20). Policy, not a measurement.
 - Harness under 40 caps the composite at 49. Policy.
-- No parsed state record and no workflow job with runs-on or steps: composite max 69. Backstop until evidence tiers ship. A state record needs a non-empty job_id, a status from the known set, and attempt as an int ≥ 0. The record may sit at the top, in a list, or under a `jobs`, `records` or `items` key one level down. Files `state.json`, `jobs.json`, `state.jsonl` and `jobs.jsonl` are read in full.
+- No parsed state record and no workflow job with runs-on or steps: composite max 69. Backstop until evidence tiers ship. Workflow means GitHub Actions only (`.github/workflows/*`, `workflow.yml`, `workflow.yaml`); GitLab CI, CircleCI and LangGraph projects are not recognised. A state record needs a non-empty job_id, a status from the known set, and attempt as an int ≥ 0. The record may sit at the top, in a list, or under a `jobs`, `records` or `items` key one level down. Files `state.json`, `jobs.json`, `state.jsonl` and `jobs.jsonl` are read in full.
 - Weights: harness 30, loop 40, graph 30. Policy.
 
 ## What does not score
