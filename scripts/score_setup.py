@@ -891,7 +891,11 @@ def render(data: dict) -> str:
     )
     lines.append("")
     if data.get("runner_note"):
-        lines.append(data["runner_note"] + ". Score stays fail-closed. Do not read this as a missing runner.")
+        lines.append(
+            data["runner_note"]
+            + ". A workflow file was found but not parsed, so the runner is unconfirmed and the score stays"
+            " fail-closed. Install pyyaml and run again."
+        )
     elif data.get("running"):
         lines.append("Runner or state file found. A plain CI job still counts. Tiers will require the workflow to reference the loop.")
     else:

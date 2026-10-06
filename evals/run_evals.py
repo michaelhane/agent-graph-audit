@@ -450,6 +450,56 @@ def skill_frontmatter(tmp: Path) -> list[str]:
     return errors
 
 
+def run_without_yaml(root: Path, *extra: str) -> subprocess.CompletedProcess:
+    """Run the scorer as if PyYAML were not installed."""
+    code = (
+        "import runpy, sys\n"
+        "sys.modules['yaml'] = None\n"  # makes `import yaml` raise ImportError
+        "sys.argv = sys.argv[1:]\n"
+        "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+    )
+    return subprocess.run([sys.executable, "-I", "-c", code, str(SCORER), "--target", str(root), *extra],
+                          capture_output=True, text=True)
+
+
+def yaml_missing_report(tmp: Path) -> list[str]:
+    """Without PyYAML the report says the runner is unconfirmed, not both capped and 'not missing' (item D5)."""
+    build(tmp, with_stuffed({".github/workflows/agent.yml": REAL_WF}))
+    out = run_without_yaml(tmp)
+    text = out.stdout
+    errors = []
+    if out.returncode != 0:
+        return [f"exit {out.returncode}: {out.stderr.strip()[-200:]}"]
+    if "runner check skipped: pyyaml not installed" not in text:
+        errors.append("report lacks the pyyaml note")
+    if "missing runner" in text:
+        errors.append("report says both 'no real runner' and 'not a missing runner'")
+    if "unconfirmed" not in text:
+        errors.append("report does not call the runner unconfirmed")
+    return errors
+
+
+def yaml_missing_score(tmp: Path) -> list[str]:
+    """Without PyYAML a workflow file stays fail-closed, a state file still counts, and no note without a workflow."""
+    errors = []
+    cases = {
+        "workflow file": (with_stuffed({".github/workflows/agent.yml": REAL_WF}), False, True),
+        "state file": (with_stuffed({"state.json": '[{"job_id":"j1","status":"failed","attempt":1}]'}), True, False),
+        "no workflow": (STUFFED_FILES, False, False),
+    }
+    for label, (files, running, note) in cases.items():
+        root = tmp / label.replace(" ", "-")
+        build(root, files)
+        out = run_without_yaml(root, "--json")
+        if out.returncode != 0:
+            errors.append(f"{label}: exit {out.returncode}")
+            continue
+        data = json.loads(out.stdout)
+        if data["running"] != running or bool(data["runner_note"]) != note:
+            errors.append(f"{label}: running {data['running']}, note {data['runner_note']!r}")
+    return errors
+
+
 def citation_of(root: Path, files: dict[str, str], check: str) -> str | None:
     build(root, files)
     data = score(root)
@@ -485,6 +535,8 @@ SPECIAL = [
     ("symlinked CLAUDE.md outside repo", symlinked_instructions),
     ("skill frontmatter is documented keys only", skill_frontmatter),
     ("external state cites all three fields", external_state_citation),
+    ("pyyaml missing: report wording", yaml_missing_report),
+    ("pyyaml missing: score and note", yaml_missing_score),
     ("instruction file cites a line that exists", empty_instruction_citation),
 ]
 

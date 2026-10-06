@@ -20,7 +20,7 @@ python3 scripts/score_setup.py --target /path/to/setup
 python3 scripts/score_setup.py --target /path/to/setup --json
 ```
 
-If PyYAML is missing and a workflow file is present, the score stays fail-closed and the report says `runner check skipped: pyyaml not installed`. That is not a missing runner. If no workflow file is present, no note appears.
+If PyYAML is missing and a workflow file is present, the score stays fail-closed and the report says `runner check skipped: pyyaml not installed`. The report calls the runner unconfirmed, not missing. If no workflow file is present, no note appears.
 
 If the user only pasted a design, write it to a temp folder first and score that folder. Say the score is of the paste, not of a running system.
 

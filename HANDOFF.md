@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **136/136** on Python 3.13.16 with PyYAML 6.0.3.
+**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **138/138** on Python 3.13.16 with PyYAML 6.0.3.
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 136 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 138 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 136/136
+python3 evals/run_evals.py                       # expect 138/138
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -60,6 +60,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | M2 | Smaller option: the dead `langgraph` path match is removed and the limit is documented (README, rubric): runner detection is GitHub Actions only (`.github/workflows/*`, `workflow.yml`/`.yaml`). GitLab, CircleCI and LangGraph projects are not recognised; a state file is the way to show a runner for them. A `langgraph/*.yml` file with a `jobs` mapping no longer counts. |
 | D3 | An empty or whitespace-only `CLAUDE.md`/`AGENTS.md` no longer passes "instruction file". The citation is the first non-blank line. |
 | D4 | "External state" now requires `job_id`, `status` and `attempt`, and cites all three lines (it checked only `job_id` and `attempt`, and cited `job_id`). |
+| D5 | With PyYAML missing the report no longer contradicts its own cap line: the note now says a workflow file was found but not parsed, so the runner is "unconfirmed" (it used to say "do not read this as a missing runner"). The JSON `runner_note` is unchanged. New evals cover the PyYAML-missing path (workflow file, state file, no workflow). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -77,7 +78,6 @@ Each item gives a reproduction case to turn into an eval fixture first (it must 
 
 ### Docs, output and hygiene
 
-- **D5:** with PyYAML missing, the report says both "no real runner…" (cap line) and "do not read this as a missing runner". Reword one.
 - **L2:** `run_evals.py` runs the scorer with `python -I`, which hides `pip install --user` packages. If PyYAML was installed that way, the "real workflow" eval should fail. Use a venv, or `-s -E` instead of `-I`.
 - **L4:** `score()` in `run_evals.py` uses `check=True`, so one scorer crash aborts the whole run instead of failing one case.
 - **L5:** `verify command`, `instruction file` and `secret ignore` still compute their citation twice (minor speed issue).
