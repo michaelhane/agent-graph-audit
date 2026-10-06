@@ -59,7 +59,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 |---|---:|---|
 | Named nodes | 20 | At least three of intake, triage, fix, review, gate, planner, executor, verifier, each on a line with an arrow (`->`, `-->`, `→`, `=>`) or the word node(s), or in backticks in a doc. Or three `add_node("…")` calls in code, any names. "Fix bugs, ask for review, pass the gate" does not pass |
 | Conditional edges | 15 | Tests passed, an edge (not "edge cases", "cutting edge"), or status ==, in docs or config. *neg*. Or `add_conditional_edges(` in code |
-| External state | 20 | `job_id` and `attempt` cited |
+| External state | 20 | `job_id`, `status` and `attempt` all found; all three lines cited |
 | Human gate | 15 | A gate phrase, and no unnegated auto-merge (any spelling or word form: automerge, auto merge, auto-merged, auto-merges, auto-merging, also inside identifiers such as allow_auto_merge or platformAutomerge), and no `merge ... --auto` on the same line, where backslash-continued lines count as one |
 | Ignore outcome | 10 | Ignore, wontfix, or not fixable in docs (*neg*). In config or code only an outcome value counts: `"ignored"`, `wontfix`, `not_fixable`. `# type: ignore` and a dependabot `ignore:` key do not pass |
 | Bounded cycle | 10 | Bounded (not "unbounded"), retry edge, or max attempts, in docs or config (*neg*). Or `recursion_limit` / `max_attempts = N` / `max_retries = N` in code |

@@ -269,6 +269,11 @@ CASES = [
     ("instruction: empty CLAUDE.md", {"CLAUDE.md": ""}, {"fail:instruction file": True}),
     ("instruction: whitespace-only AGENTS.md", {"AGENTS.md": "\n  \n"}, {"fail:instruction file": True}),
     ("instruction: CLAUDE.md with text", {"CLAUDE.md": "\nBe careful.\n"}, {"pass:instruction file": True}),
+    ("state: job_id and attempt without status", {"README.md": "Each record has a job_id and an attempt.\n"},
+     {"fail:external state": True}),
+    ("state: status alone", {"README.md": "Each record has a status.\n"}, {"fail:external state": True}),
+    ("state: all three words", {"README.md": "Each record has a job_id, a status and an attempt.\n"},
+     {"pass:external state": True}),
 
     # Runner detection is GitHub Actions only (review item M2, smaller option).
     ("runner: langgraph path is not a workflow", with_stuffed({"langgraph/pipeline.yml": REAL_WF}),
@@ -455,6 +460,14 @@ def citation_of(root: Path, files: dict[str, str], check: str) -> str | None:
     return None
 
 
+def external_state_citation(tmp: Path) -> list[str]:
+    """External state cites the job_id, status and attempt lines, not only job_id (item D4)."""
+    got = citation_of(tmp, {"notes.md": "job_id is the key.\nstatus is one of a few words.\nattempt counts from 0.\n"},
+                      "external state")
+    want = "notes.md:1, notes.md:2, notes.md:3"
+    return [] if got == want else [f"citation {got!r}, want {want!r}"]
+
+
 def empty_instruction_citation(tmp: Path) -> list[str]:
     """An instruction file cites a line that exists (item D3)."""
     got = citation_of(tmp, {"CLAUDE.md": "\n\nBe careful.\n"}, "instruction file")
@@ -471,6 +484,7 @@ SPECIAL = [
     ("self scan reports skip", self_scan),
     ("symlinked CLAUDE.md outside repo", symlinked_instructions),
     ("skill frontmatter is documented keys only", skill_frontmatter),
+    ("external state cites all three fields", external_state_citation),
     ("instruction file cites a line that exists", empty_instruction_citation),
 ]
 

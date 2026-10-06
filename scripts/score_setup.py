@@ -638,6 +638,14 @@ def node_names(files: list[tuple[str, list[str]]]) -> tuple[set[str], str | None
     return found, first
 
 
+def external_state_cite(files: list[tuple[str, list[str]]]) -> str | None:
+    """Citations for job_id, status and attempt, all three required."""
+    cites = [cite(files, p) for p in (r"job_id", r"\bstatus\b", r"\battempt\b")]
+    if any(c is None for c in cites):
+        return None
+    return ", ".join(dict.fromkeys(cites))
+
+
 def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
     gate_phrase = cite_any(files, GATE_PHRASES)
     auto_merge = auto_merge_cite(files)
@@ -660,6 +668,7 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
         or cite(config, JOIN_CONFIG_RE)
         or cite(code, JOIN_CODE_RE)
     )
+    state_cite = external_state_cite(files)
     checks = [
         (
             "named nodes",
@@ -680,9 +689,9 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
         (
             "external state",
             20,
-            cite(files, r"job_id") is not None and cite(files, r"\battempt\b") is not None,
+            state_cite is not None,
             "job id, status, and attempt stored outside the chat",
-            cite(files, r"job_id"),
+            state_cite,
             None,
         ),
         (
