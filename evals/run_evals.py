@@ -345,6 +345,20 @@ CASES = [
      {"pass:no inline secrets": True}),
     ("secret: descriptor key camelCase", {"config.json": '{"tokenType": "bearer-access-token"}\n'},
      {"pass:no inline secrets": True}),
+
+    # Scan scope (field-test item F1): .claude/worktrees/ copies and .gitignore'd paths are not read.
+    ("scope: gitignored folder is not evidence", {".gitignore": "cache/\n",
+                                                  "cache/notes.md": "human gate. a join node.\n"},
+     {"fail:human gate": True, "fail:join": True}),
+    ("scope: .claude/worktrees copy is not evidence", {".claude/worktrees/w1/CLAUDE.md": "Be careful.\n"},
+     {"fail:instruction file": True}),
+    ("scope: gitignored state folder still counts", with_stuffed({
+        ".gitignore": ".env\nstate/\n", "state/state.json": '[{"job_id":"j1","status":"failed","attempt":1}]'}),
+     {"running": True}),
+    ("scope: gitignored .env is not an inline secret",
+     {".gitignore": ".env\n", ".env": "API_KEY=abcdefghij0123456789\n"}, {"pass:no inline secrets": True}),
+    ("scope: .env that is not ignored is still read",
+     {".gitignore": "node_modules\n", ".env": "API_KEY=abcdefghij0123456789\n"}, {"fail:no inline secrets": True}),
 ]
 
 
@@ -648,6 +662,21 @@ def empty_instruction_citation(tmp: Path) -> list[str]:
     return [] if got == "CLAUDE.md:3" else [f"citation {got!r}, want 'CLAUDE.md:3'"]
 
 
+def out_of_scope_files(tmp: Path) -> list[str]:
+    """Gitignored paths and .claude/worktrees/ copies are neither cited nor counted (item F1)."""
+    build(tmp, {".gitignore": "cache/\n", "cache/notes.md": "human gate. a join node.\n",
+                ".claude/worktrees/w1/CLAUDE.md": "human gate. a join node. Be careful.\n"})
+    data = score(tmp)
+    errors = []
+    if data["files_scanned"] != 1:
+        errors.append(f"files_scanned {data['files_scanned']}, want 1 (.gitignore only)")
+    cited = [c["citation"] for layer in ("harness", "loop", "graph") for c in data[layer]["checks"]
+             if c["citation"] and ("cache/" in c["citation"] or ".claude/worktrees/" in c["citation"])]
+    if cited:
+        errors.append(f"cites out-of-scope files: {cited}")
+    return errors
+
+
 SPECIAL = [
     *(repo_under(d) for d in ("artifacts", "build", "dist", "venv", "node_modules")),
     installed_skill("core files", ".claude/skills/agent-graph-audit", only_core=True),
@@ -665,6 +694,7 @@ SPECIAL = [
     ("pyyaml missing: report wording", yaml_missing_report),
     ("pyyaml missing: score and note", yaml_missing_score),
     ("instruction file cites a line that exists", empty_instruction_citation),
+    ("gitignored and worktree copies are not scanned", out_of_scope_files),
 ]
 
 

@@ -28,6 +28,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 - Graph checks (except external state and human gate) and the loop's claim, fail-closed and repeated-error checks match words in docs and config only. In code those words almost only appear in comments ("non-zero in the result", "LIABLE FOR ANY CLAIM"). Code counts for the graph only through graph-builder calls (`add_node`, `add_conditional_edges`, `add_edge([a, b], c)`) and numeric bounds.
 - Every other check reads all three kinds.
 - License files (`LICENSE*`, `COPYING*`, `NOTICE*`), vendored code and tool caches (`vendor`, `third_party`, `site-packages`, `target`, `.tox`, `.cache`, …) and any folder holding `pyvenv.cfg` are not read.
+- `.claude/worktrees/` is not read, and neither are paths a `.gitignore` ignores, except state files (`state.json`, `jobs.json`, `state.jsonl`, `jobs.jsonl`). An ignored `.env` is therefore not checked for inline secrets.
 
 ## Harness (100)
 
