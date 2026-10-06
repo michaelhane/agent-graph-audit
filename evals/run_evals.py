@@ -607,8 +607,13 @@ def user_site_pyyaml(tmp: Path) -> list[str]:
     # ignored by the scorer's -E, so it is dropped rather than set.
     env = {k: v for k, v in os.environ.items() if k != "PYTHONUSERBASE"}
     env.update({"HOME": str(home), "APPDATA": str(home)})
-    site = subprocess.run([sys.executable, *SCORER_FLAGS, "-c", "import site; print(site.getusersitepackages())"],
-                          capture_output=True, text=True, check=True, env=env).stdout.strip()
+    probe = "import site; print(site.ENABLE_USER_SITE); print(site.getusersitepackages())"
+    enabled, site = subprocess.run([sys.executable, *SCORER_FLAGS, "-c", probe],
+                                   capture_output=True, text=True, check=True, env=env).stdout.split("\n", 1)
+    site = site.strip()
+    # A plain venv turns the user site off, so this Python cannot show the bug either way.
+    if enabled.strip() != "True":
+        raise Skip("this Python has the user site off (a plain venv); run with the system Python to test L2")
     # Never write the stub outside this case's temp folder: it would shadow the real PyYAML.
     if not Path(site).resolve().is_relative_to(tmp.resolve()):
         return [f"user site {site} is outside the eval's temp folder; stub not written"]
