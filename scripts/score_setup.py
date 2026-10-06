@@ -299,17 +299,6 @@ def cite_affirmed(
     return None
 
 
-def cite_named(files: list[tuple[str, list[str]]], pattern: str, filename: str) -> str | None:
-    cre = re.compile(pattern, re.I)
-    for name, lines in files:
-        if Path(name).name != filename:
-            continue
-        for i, line in enumerate(lines, start=1):
-            if cre.search(line):
-                return f"{name}:{i}"
-    return None
-
-
 def verify_files(files: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
     """Files that may hold a verify command: requirements files only list dependencies."""
     return [f for f in files if not re.match(r"requirements.*\.txt$", Path(f[0]).name, re.I)]
@@ -328,6 +317,21 @@ def permissions_cite(files: list[tuple[str, list[str]]]) -> str | None:
         m = PERMISSION_LIST_RE.search(text)
         if m:
             return f"{name}:{text.count(chr(10), 0, m.start()) + 1}"
+    return None
+
+
+# A .gitignore line that ignores a file named .env: .env, /.env, **/.env, .env*, *.env.
+ENV_IGNORE_RE = re.compile(r"^(?:/|\*\*/)?(?:\*)?\.env\*?$")
+
+
+def gitignore_env_cite(files: list[tuple[str, list[str]]]) -> str | None:
+    """Line in a .gitignore that ignores .env itself. Comments, un-ignores and .envrc don't count."""
+    for name, lines in files:
+        if Path(name).name != ".gitignore":
+            continue
+        for i, line in enumerate(lines, start=1):
+            if ENV_IGNORE_RE.match(line.strip()):
+                return f"{name}:{i}"
     return None
 
 
@@ -419,7 +423,7 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     found = secret_hit(files)
     instruction = instruction_cite(files)
     verify = cite_any(verify_files(files), [VERIFY_CMD_RE.pattern])
-    secret_ignore = cite_named(files, r"\.env", ".gitignore")
+    secret_ignore = gitignore_env_cite(files)
     scanned = len(files) > 0
     secret_ok = scanned and found is None
     secret_cite = f"scanned:{len(files)}" if secret_ok else found
@@ -450,7 +454,7 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
             "secret ignore",
             10,
             secret_ignore is not None,
-            ".gitignore itself mentions .env",
+            "A .gitignore line that ignores .env itself",
             secret_ignore,
             None,
         ),

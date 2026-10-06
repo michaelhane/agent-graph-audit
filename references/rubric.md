@@ -35,7 +35,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 |---|---:|---|
 | Instruction file | 15 | `AGENTS.md` or `CLAUDE.md` with at least one non-blank line, or a definition of done |
 | Verify command | 15 | A real command: `npm test`, `pytest`, `go test`, `cargo test`, `pnpm test`, `yarn test`, `make test`, `npm run lint`, `npm run typecheck`, `npm run test`. A dependency line (`pytest>=8.0`, `pytest[extras]`, anything in `requirements*.txt`) is not a command. |
-| Secret ignore | 10 | `.gitignore` itself mentions `.env` |
+| Secret ignore | 10 | A `.gitignore` line that ignores `.env` itself: `.env`, `/.env`, `**/.env`, `.env*` or `*.env`. `.envrc`, `.env.example`, `!` un-ignore lines and comments don't count |
 | No inline secrets | 10 | At least one file was scanned and no secret was found. A secret is a key name assigned a quoted literal of 12+ characters, or an unquoted value in a `.env`-style file. Placeholders, paths, env-var names, and descriptor keys like `token_type` don't count |
 | Work isolation | 10 | Worktree, branch per, or isolated branch. "one branch" does not pass. *neg*, and "share a single worktree" does not pass |
 | Tool boundary | 15 | Allowlist, protected path, cannot merge/push, or a non-empty `allow`/`deny` list in `.claude/settings.json` or `.claude/settings.local.json`. *neg* |

@@ -266,6 +266,18 @@ CASES = [
     ("graph: conditional edge in docs", {"README.md": "Conditional edge: review -> gate when tests pass.\n"},
      {"pass:conditional edges": True}),
 
+    # .gitignore must ignore .env itself (review item L6).
+    ("gitignore: .envrc is not .env", {".gitignore": ".envrc\n"}, {"fail:secret ignore": True}),
+    ("gitignore: un-ignore line is not an ignore", {".gitignore": "!.env.example\n"}, {"fail:secret ignore": True}),
+    ("gitignore: comment is not an ignore", {".gitignore": "# keep .env out\n"}, {"fail:secret ignore": True}),
+    ("gitignore: .env.example alone", {".gitignore": ".env.example\n"}, {"fail:secret ignore": True}),
+    ("gitignore: .env", {".gitignore": "node_modules\n.env\n"}, {"pass:secret ignore": True}),
+    ("gitignore: /.env", {".gitignore": "/.env\n"}, {"pass:secret ignore": True}),
+    ("gitignore: .env*", {".gitignore": ".env*\n!.env.example\n"}, {"pass:secret ignore": True}),
+    ("gitignore: *.env", {".gitignore": "*.env\n"}, {"pass:secret ignore": True}),
+    ("gitignore: **/.env", {".gitignore": "**/.env\n"}, {"pass:secret ignore": True}),
+    ("gitignore: .env with trailing space", {".gitignore": ".env  \n"}, {"pass:secret ignore": True}),
+
     # Instruction file and external state (review items D3, D4).
     ("instruction: empty CLAUDE.md", {"CLAUDE.md": ""}, {"fail:instruction file": True}),
     ("instruction: whitespace-only AGENTS.md", {"AGENTS.md": "\n  \n"}, {"fail:instruction file": True}),
@@ -521,7 +533,7 @@ def citations_computed_once(tmp: Path) -> list[str]:
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     calls = {"instruction file": 0, "verify command": 0, "secret ignore": 0}
-    real_instruction, real_any, real_named = mod.instruction_cite, mod.cite_any, mod.cite_named
+    real_instruction, real_any, real_ignore = mod.instruction_cite, mod.cite_any, mod.gitignore_env_cite
 
     def instruction(files):
         calls["instruction file"] += 1
@@ -532,12 +544,11 @@ def citations_computed_once(tmp: Path) -> list[str]:
             calls["verify command"] += 1
         return real_any(files, patterns)
 
-    def cite_named(files, pattern, filename):
-        if filename == ".gitignore":
-            calls["secret ignore"] += 1
-        return real_named(files, pattern, filename)
+    def gitignore_env_cite(files):
+        calls["secret ignore"] += 1
+        return real_ignore(files)
 
-    mod.instruction_cite, mod.cite_any, mod.cite_named = instruction, cite_any, cite_named
+    mod.instruction_cite, mod.cite_any, mod.gitignore_env_cite = instruction, cite_any, gitignore_env_cite
     mod.harness_checks([("CLAUDE.md", ["npm test"]), (".gitignore", [".env"])])
     return [f"{name} computed {n} times" for name, n in calls.items() if n != 1]
 

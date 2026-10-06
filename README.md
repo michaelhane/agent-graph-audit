@@ -45,7 +45,7 @@ The report gives the composite, the three layer scores, the next missing check t
 python3 evals/run_evals.py
 ```
 
-141 cases. Each one is a bypass or bug found in review, for example:
+151 cases. Each one is a bypass or bug found in review, for example:
 
 - an empty `state.json` lifting the ceiling
 - a workflow comment counted as a job
