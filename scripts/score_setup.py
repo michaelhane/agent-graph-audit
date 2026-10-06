@@ -53,6 +53,12 @@ CODE_NAMES = {"Makefile", "Dockerfile"}
 # Legal boilerplate is never evidence ("LIABLE FOR ANY CLAIM" is in the MIT license).
 LICENSE_STEMS = {"LICENSE", "LICENCE", "COPYING", "NOTICE"}
 
+# State files are parsed whole: a real one is often over 200 KB, and a cut file is not valid JSON.
+STATE_NAMES = {"state.json", "jobs.json", "state.jsonl", "jobs.jsonl"}
+MAX_STATE_CHARS = 50_000_000
+# A state file may wrap its records one level down: {"jobs": [...]}.
+STATE_WRAPPER_KEYS = ("jobs", "records", "items")
+
 TEXT_SUFFIXES = {
     ".md",
     ".txt",
@@ -96,11 +102,11 @@ PLACEHOLDER_RE = re.compile(
 ENV_VAR_NAME_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
 # A numeric cap. "max attempts" alone (no number) no longer counts.
 ATTEMPT_RE = re.compile(
-    r"(max[_\s-]?attempts(?:\s*(?:of|is|to|at)?\s*|[^\n\d]{0,20}?[:=]\s*)\d"
+    r"(max[_\s-]?(?:attempts|retries)(?:\s*(?:of|is|to|at)?\s*|[^\n\d]{0,20}?[:=]\s*)\d"
+    r"|\bstop_after_attempt\(\s*\d"
     r"|attempt(?:s)?\s*[:=<]\s*\d"
     r"|retry(?:\s+cap)?\s*(?:of|at|<=|:)?\s*\d"
-    r"|\bmax(?:imum)?\s+(?:of\s+)?\d+\s+(?:attempts|retries|tries)\b"
-    r"|budget of \d)",
+    r"|\bmax(?:imum)?\s+(?:of\s+)?\d+\s+(?:attempts|retries|tries)\b)",
     re.I,
 )
 
@@ -122,8 +128,10 @@ NEGATED_AFTER_RE = re.compile(
     re.I,
 )
 CLAUSE_BREAK_RE = re.compile(r"[.;:!?,]")
+# pytest followed by a version specifier or extras is a dependency line, not a command.
 VERIFY_CMD_RE = re.compile(
-    r"(npm test|pytest|go test|cargo test|pnpm test|yarn test|make test|npm run (?:lint|typecheck))",
+    r"(npm test|pytest(?!\s*[<>=!~\[])|go test|cargo test|pnpm test|yarn test|make test"
+    r"|npm run (?:lint|typecheck|test)\b)",
     re.I,
 )
 FAIL_CLOSED_RE = re.compile(r"(fail closed|exit code|must pass|non-zero)", re.I)
@@ -148,7 +156,7 @@ def is_scanned_file(path: Path) -> bool:
     name = path.name
     if name in {".env", ".envrc"} or name.startswith(".env."):
         return True
-    return path.suffix.lower() in TEXT_SUFFIXES or name in {
+    return path.suffix.lower() in TEXT_SUFFIXES or name in STATE_NAMES or name in {
         "AGENTS.md",
         "CLAUDE.md",
         "Makefile",
@@ -221,8 +229,9 @@ def read_files(root: Path, skipped: list[str] | None = None) -> list[tuple[str, 
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        if len(text) > 200_000:
-            text = text[:200_000]
+        limit = MAX_STATE_CHARS if path.name in STATE_NAMES else 200_000
+        if len(text) > limit:
+            text = text[:limit]
         rel = (path.relative_to(root) if path != root else Path(path.name)).as_posix()
         files.append((rel, text.splitlines()))
     return files
@@ -290,13 +299,38 @@ def cite_affirmed(
     return None
 
 
-def cite_named(files: list[tuple[str, list[str]]], pattern: str, filename: str) -> str | None:
-    cre = re.compile(pattern, re.I)
+def verify_files(files: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
+    """Files that may hold a verify command: requirements files only list dependencies."""
+    return [f for f in files if not re.match(r"requirements.*\.txt$", Path(f[0]).name, re.I)]
+
+
+# A non-empty allow or deny list in Claude Code settings is a tool boundary.
+PERMISSION_LIST_RE = re.compile(r'"(?:allow|deny)"\s*:\s*\[\s*"')
+
+
+def permissions_cite(files: list[tuple[str, list[str]]]) -> str | None:
     for name, lines in files:
-        if Path(name).name != filename:
+        if not re.fullmatch(r"(?:.*/)?\.claude/settings(?:\.local)?\.json", name):
+            continue
+        # The list may start on a later line than its key, so test the joined text.
+        text = "\n".join(lines)
+        m = PERMISSION_LIST_RE.search(text)
+        if m:
+            return f"{name}:{text.count(chr(10), 0, m.start()) + 1}"
+    return None
+
+
+# A .gitignore line that ignores a file named .env: .env, /.env, **/.env, .env*, *.env.
+ENV_IGNORE_RE = re.compile(r"^(?:/|\*\*/)?(?:\*)?\.env\*?$")
+
+
+def gitignore_env_cite(files: list[tuple[str, list[str]]]) -> str | None:
+    """Line in a .gitignore that ignores .env itself. Comments, un-ignores and .envrc don't count."""
+    for name, lines in files:
+        if Path(name).name != ".gitignore":
             continue
         for i, line in enumerate(lines, start=1):
-            if cre.search(line):
+            if ENV_IGNORE_RE.match(line.strip()):
                 return f"{name}:{i}"
     return None
 
@@ -305,9 +339,11 @@ def instruction_cite(files: list[tuple[str, list[str]]]) -> str | None:
     found = cite(files, r"definition of done")
     if found:
         return found
-    for name, _ in files:
+    for name, lines in files:
         if re.search(r"(AGENTS|CLAUDE)\.md$", name):
-            return f"{name}:1"
+            for i, line in enumerate(lines, start=1):
+                if line.strip():
+                    return f"{name}:{i}"  # an empty file is not an instruction file
     return None
 
 
@@ -385,36 +421,41 @@ def secret_hit(files: list[tuple[str, list[str]]]) -> str | None:
 
 def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     found = secret_hit(files)
+    instruction = instruction_cite(files)
+    verify = cite_any(verify_files(files), [VERIFY_CMD_RE.pattern])
+    secret_ignore = gitignore_env_cite(files)
     scanned = len(files) > 0
     secret_ok = scanned and found is None
     secret_cite = f"scanned:{len(files)}" if secret_ok else found
     isolation = cite_affirmed(files, [r"worktree", r"branch per", r"isolated branch"], shared_words=True)
-    boundary = cite_affirmed(files, [r"allowlist", r"protected path", r"cannot merge", r"cannot push"])
+    boundary = cite_affirmed(files, [r"allowlist", r"protected path", r"cannot merge", r"cannot push"]) or permissions_cite(
+        files
+    )
     trace = cite_affirmed(files, [r"\btrace\b", r"audit log", r"tool call", r"run log"])
-    budget = cite_affirmed(files, [r"timeout", r"token budget", r"max minutes", r"\bbudget\b"])
+    budget = cite_affirmed(files, [r"timeout", r"token budget", r"max minutes", r"\bbudget\b", r"spend cap"])
     checks = [
         (
             "instruction file",
             15,
-            instruction_cite(files) is not None,
+            instruction is not None,
             "AGENTS.md or CLAUDE.md, or an explicit definition of done",
-            instruction_cite(files),
+            instruction,
             None,
         ),
         (
             "verify command",
             15,
-            cite_any(files, [VERIFY_CMD_RE.pattern]) is not None,
+            verify is not None,
             "A named test, lint, or typecheck command",
-            cite_any(files, [VERIFY_CMD_RE.pattern]),
+            verify,
             None,
         ),
         (
             "secret ignore",
             10,
-            cite_named(files, r"\.env", ".gitignore") is not None,
-            ".gitignore itself mentions .env",
-            cite_named(files, r"\.env", ".gitignore"),
+            secret_ignore is not None,
+            "A .gitignore line that ignores .env itself",
+            secret_ignore,
             None,
         ),
         (
@@ -465,7 +506,7 @@ def loop_checks(files: list[tuple[str, list[str]]]) -> dict:
     # Claim, fail-closed and repeated-error are phrases. In code they only ever match
     # comments ("non-zero in the result", "Same error message"), so they read docs and config.
     prose = of_kind(files, "doc", "config")
-    command = cite_any(files, [VERIFY_CMD_RE.pattern])
+    command = cite_any(verify_files(files), [VERIFY_CMD_RE.pattern])
     closed = cite_any(prose, [FAIL_CLOSED_RE.pattern])
     repeated = cite_any(prose, [r"same error", r"same failure", r"\btwice\b", r"\bstuck\b"])
     claim = cite_affirmed(prose, [r"(?<!any )\bclaim\b", r"in progress", r"lock file", r"already taken"])
@@ -604,6 +645,14 @@ def node_names(files: list[tuple[str, list[str]]]) -> tuple[set[str], str | None
     return found, first
 
 
+def external_state_cite(files: list[tuple[str, list[str]]]) -> str | None:
+    """Citations for job_id, status and attempt, all three required."""
+    cites = [cite(files, p) for p in (r"job_id", r"\bstatus\b", r"\battempt\b")]
+    if any(c is None for c in cites):
+        return None
+    return ", ".join(dict.fromkeys(cites))
+
+
 def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
     gate_phrase = cite_any(files, GATE_PHRASES)
     auto_merge = auto_merge_cite(files)
@@ -626,6 +675,7 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
         or cite(config, JOIN_CONFIG_RE)
         or cite(code, JOIN_CODE_RE)
     )
+    state_cite = external_state_cite(files)
     checks = [
         (
             "named nodes",
@@ -646,9 +696,9 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
         (
             "external state",
             20,
-            cite(files, r"job_id") is not None and cite(files, r"\battempt\b") is not None,
+            state_cite is not None,
             "job id, status, and attempt stored outside the chat",
-            cite(files, r"job_id"),
+            state_cite,
             None,
         ),
         (
@@ -690,11 +740,16 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
 STATUSES = {"open", "claimed", "in_progress", "running", "passed", "failed", "ignored", "escalated", "done"}
 
 
-def state_record_ok(node) -> bool:
+def state_record_ok(node, wrapped: bool = False) -> bool:
     if isinstance(node, list):
-        return any(state_record_ok(item) for item in node)
+        return any(state_record_ok(item, wrapped) for item in node)
     if not isinstance(node, dict):
         return False
+    if not wrapped:
+        for key in STATE_WRAPPER_KEYS:
+            inner = node.get(key)
+            if isinstance(inner, list) and state_record_ok(inner, True):
+                return True
     job_id = node.get("job_id")
     status = node.get("status")
     attempt = node.get("attempt")
@@ -709,21 +764,28 @@ def state_record_ok(node) -> bool:
 
 def state_file_ready(files: list[tuple[str, list[str]]]) -> bool:
     for fname, lines in files:
-        if Path(fname).name not in {"state.json", "jobs.json"}:
+        if Path(fname).name not in STATE_NAMES:
             continue
         raw = "\n".join(lines).strip()
         if not raw:
             continue
         try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+            if fname.endswith(".jsonl"):
+                data = [json.loads(line) for line in lines if line.strip()]
+            else:
+                data = json.loads(raw)
+            if state_record_ok(data):
+                return True
+        except (ValueError, RecursionError):  # JSONDecodeError is a ValueError
             continue
-        if state_record_ok(data):
-            return True
     return False
 
 
 def workflow_files(files: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
+    """GitHub Actions only: .github/workflows/* and files named workflow.yml/.yaml.
+
+    GitLab CI, CircleCI and LangGraph projects are not recognised as runners.
+    """
     found = []
     for item in files:
         fname = item[0]
@@ -732,7 +794,6 @@ def workflow_files(files: list[tuple[str, list[str]]]) -> list[tuple[str, list[s
             ".github/workflows/" in lowered
             or lowered.endswith("workflow.yml")
             or lowered.endswith("workflow.yaml")
-            or "langgraph" in lowered
         ):
             found.append(item)
     return found
@@ -837,7 +898,11 @@ def render(data: dict) -> str:
     )
     lines.append("")
     if data.get("runner_note"):
-        lines.append(data["runner_note"] + ". Score stays fail-closed. Do not read this as a missing runner.")
+        lines.append(
+            data["runner_note"]
+            + ". A workflow file was found but not parsed, so the runner is unconfirmed and the score stays"
+            " fail-closed. Install pyyaml and run again."
+        )
     elif data.get("running"):
         lines.append("Runner or state file found. A plain CI job still counts. Tiers will require the workflow to reference the loop.")
     else:

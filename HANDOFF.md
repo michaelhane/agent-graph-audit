@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.1 plus review fixes H1–H7. `python3 evals/run_evals.py` gives **105/105** on Python 3.13.16 with PyYAML 6.0.3.
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gives **154/154** on Python 3.13.16 with PyYAML 6.0.3.
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 105 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 154 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 105/105
+python3 evals/run_evals.py                       # expect 154/154
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -54,6 +54,18 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | H7 | Prose words matched inside code (`", ".join`, `# type: ignore`, license "ANY CLAIM", comments) and in vendored folders. Graph checks and the loop's claim, fail-closed and repeated-error checks now read docs and config only. Code counts for the graph through `add_node`, `add_conditional_edges`, `add_edge([a, b], c)` and numeric bounds. More folders are skipped (vendor, caches, virtual environments by `pyvenv.cfg`), and so are license files. Python stdlib: 69% → 28%. |
 | L3 | Dead code (`names_blob`, `file_text`) removed. |
 | D1, D2 | Rubric and README claims aligned with the code. |
+| D6 | SKILL.md frontmatter keeps only `name` and `description` (`type` and `lifecycle` removed). The `harness-creator` pointer is gone; no other skill is named. |
+| M1, L1 | State files are parsed from the full file (up to 50M characters), `jobs`/`records`/`items` wrappers one level down count, `state.jsonl`/`jobs.jsonl` are read line by line, and a `RecursionError` or `ValueError` on bad JSON is caught instead of crashing the scorer. |
+| M3 | Pass: `MAX_RETRIES = 3`, `stop_after_attempt(3)`, `npm run test`, non-empty `allow`/`deny` in `.claude/settings*.json`, "spend cap". Fail: `pytest>=8.0` dependency lines (and `requirements*.txt`), "token budget of N" as an attempt cap (the `budget of \d` alternative is removed). |
+| M2 | Smaller option: the dead `langgraph` path match is removed and the limit is documented (README, rubric): runner detection is GitHub Actions only (`.github/workflows/*`, `workflow.yml`/`.yaml`). GitLab, CircleCI and LangGraph projects are not recognised; a state file is the way to show a runner for them. A `langgraph/*.yml` file with a `jobs` mapping no longer counts. |
+| D3 | An empty or whitespace-only `CLAUDE.md`/`AGENTS.md` no longer passes "instruction file". The citation is the first non-blank line. |
+| D4 | "External state" now requires `job_id`, `status` and `attempt`, and cites all three lines (it checked only `job_id` and `attempt`, and cited `job_id`). |
+| D5 | With PyYAML missing the report no longer contradicts its own cap line: the note now says a workflow file was found but not parsed, so the runner is "unconfirmed" (it used to say "do not read this as a missing runner"). The JSON `runner_note` is unchanged. New evals cover the PyYAML-missing path (workflow file, state file, no workflow). |
+| L2 | The evals run the scorer with `-E -P` instead of `-I`, so a PyYAML from `pip install --user` is found. (HANDOFF suggested `-s -E`, but `-s` is the flag that hides the user site, so `-P` is used instead.) |
+| L4 | A scorer crash now fails the cases that hit it (`ScorerCrash`) instead of aborting the eval run. `EVAL_SCORER` swaps in another scorer; only the crash check uses it. |
+| L5 | `instruction file`, `verify command` and `secret ignore` compute their citation once each in `harness_checks`. |
+| L6 | "Secret ignore" needs a `.gitignore` line that ignores `.env` itself (`.env`, `/.env`, `**/.env`, `.env*`, `*.env`). `.envrc`, `.env.example`, `!` un-ignore lines and comments no longer pass. `cite_named` was unused after this and is removed. |
+| Eval gaps | Three cases pin the caps: graph credit cut to loop + 20, graph credit left alone inside the limit, and harness under 40 capping the composite at 49 (all with a real state file, so the 69 ceiling can't hide them). Checked by mutation: with the slack and the 49 cap loosened, two of them fail. The PyYAML-missing path was covered under D5. These are coverage cases; they pass on the code before and after, so they could not be shown failing first. |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -69,49 +81,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 
 Each item gives a reproduction case to turn into an eval fixture first (it must fail on the current code), then the expected result.
 
-### M1. Real state files are missed (high value)
-
-- A `state.json` over 200 KB (for example 3,000 records, 324 KB) is cut at 200,000 characters before parsing, so it never counts. Expected: `running: true`. Fix: parse state files from the full file.
-- `{"jobs": [{"job_id": "j1", "status": "failed", "attempt": 1}]}` isn't recognised. Expected: counts. Fix: accept common wrappers (`jobs`, `records`, `items`) one level down. Consider `state.jsonl`.
-- Do **L1** at the same time: a `state.json` of 100,000 nested `[` makes the scorer exit 1 with an uncaught `RecursionError`. Catch `RecursionError`/`ValueError` beside `JSONDecodeError`.
-
-### M3. Common real config scores wrong
-
-False negatives (should pass):
-
-| Fixture | Check |
-|---|---|
-| `MAX_RETRIES = 3` | attempt cap |
-| `@retry(stop=stop_after_attempt(3))` | attempt cap |
-| "Run npm run test before merging." | verify command (`npm run lint` already passes) |
-| `.claude/settings.json` with `{"permissions": {"allow": [...], "deny": [...]}}` | tool boundary |
-| "There is a spend cap of $5 per run." | budget |
-
-False positives (should fail):
-
-| Fixture | Check |
-|---|---|
-| `pytest>=8.0` in `requirements-dev.txt` | verify command (a dependency line, not a command) |
-| "We have a token budget of 50000." | attempt cap (the `budget of \d` alternative) |
-
-### M2. Runner detection
-
-- A LangGraph project (`langgraph.json` with a `graphs` mapping, plus Python using `StateGraph`) never counts as a runner. The `langgraph` path match in `workflow_files` can never pass, because it requires a GitHub-style `jobs:` mapping.
-- GitLab (`.gitlab-ci.yml`) and CircleCI (`.circleci/config.yml`) aren't recognised either (from reading the code).
-- Decide: either add real checks or remove the dead match, and document "GitHub Actions only".
-
-### Docs, output and hygiene
-
-- **D3:** an empty, 0-byte `CLAUDE.md` passes "instruction file", citing a line 1 that doesn't exist. Should fail.
-- **D4:** "external state" says "job id, status, and attempt" but never checks status, and cites only the `job_id` line.
-- **D5:** with PyYAML missing, the report says both "no real runner…" (cap line) and "do not read this as a missing runner". Reword one.
-- **D6:** the `type` and `lifecycle` frontmatter keys in `SKILL.md` are rejected by the skill-creator validator (`quick_validate.py`). Not verified whether Claude Code itself cares. `SKILL.md` also points to a `harness-creator` skill that may not exist where this gets installed.
-- **L2:** `run_evals.py` runs the scorer with `python -I`, which hides `pip install --user` packages. If PyYAML was installed that way, the "real workflow" eval should fail. Use a venv, or `-s -E` instead of `-I`.
-- **L4:** `score()` in `run_evals.py` uses `check=True`, so one scorer crash aborts the whole run instead of failing one case.
-- **L5:** `verify command`, `instruction file` and `secret ignore` still compute their citation twice (minor speed issue).
-- **L6:** the `.gitignore` check matches any `\.env`, including `.envrc` and the un-ignore line `!.env.example`.
-
-**Eval gaps:** no case where the graph cap (`loop + 20`) or the harness-under-40 cap actually changes the result, and no case for the PyYAML-missing path.
+Nothing open from the v0.2 list. Remaining ideas are under Known limits.
 
 ### Known limits (accepted for now, documented in README)
 

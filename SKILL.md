@@ -1,15 +1,13 @@
 ---
 name: agent-graph-audit
 description: "Score an agent setup as a percentage on harness, loop, and graph readiness. Use when the user asks to audit a repo, check if a workflow is a real graph, check looping, or score a Claude or agent harness."
-type: workflow
-lifecycle: active
 ---
 
 # Agent Graph Audit — Score the setup
 
 Score a folder or repo on three layers. Report percentages. Do not invent a passing grade from a chat description if the files are available.
 
-Not for writing a new harness from scratch — use harness-creator for that. Not for prompt tuning.
+Not for writing a new harness from scratch. Not for prompt tuning.
 
 This version is a claim-tier scorer. It matches text and parsed files. It does not execute the loop.
 
@@ -22,7 +20,7 @@ python3 scripts/score_setup.py --target /path/to/setup
 python3 scripts/score_setup.py --target /path/to/setup --json
 ```
 
-If PyYAML is missing and a workflow file is present, the score stays fail-closed and the report says `runner check skipped: pyyaml not installed`. That is not a missing runner. If no workflow file is present, no note appears.
+If PyYAML is missing and a workflow file is present, the score stays fail-closed and the report says `runner check skipped: pyyaml not installed`. The report calls the runner unconfirmed, not missing. If no workflow file is present, no note appears.
 
 If the user only pasted a design, write it to a temp folder first and score that folder. Say the score is of the paste, not of a running system.
 

@@ -11,7 +11,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 
 - Graph credit = min(graph, loop + 20). Policy, not a measurement.
 - Harness under 40 caps the composite at 49. Policy.
-- No parsed state record and no workflow job with runs-on or steps: composite max 69. Backstop until evidence tiers ship. A state record needs a non-empty job_id, a status from the known set, and attempt as an int ≥ 0.
+- No parsed state record and no workflow job with runs-on or steps: composite max 69. Backstop until evidence tiers ship. Workflow means GitHub Actions only (`.github/workflows/*`, `workflow.yml`, `workflow.yaml`); GitLab CI, CircleCI and LangGraph projects are not recognised. A state record needs a non-empty job_id, a status from the known set, and attempt as an int ≥ 0. The record may sit at the top, in a list, or under a `jobs`, `records` or `items` key one level down. Files `state.json`, `jobs.json`, `state.jsonl` and `jobs.jsonl` are read in full.
 - Weights: harness 30, loop 40, graph 30. Policy.
 
 ## What does not score
@@ -33,21 +33,21 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 
 | Check | Weight | Passes when |
 |---|---:|---|
-| Instruction file | 15 | `AGENTS.md`, `CLAUDE.md`, or a definition of done |
-| Verify command | 15 | A real command: `npm test`, `pytest`, `go test`, `cargo test`, `pnpm test`, `yarn test`, `make test`, `npm run lint`, `npm run typecheck` |
-| Secret ignore | 10 | `.gitignore` itself mentions `.env` |
+| Instruction file | 15 | `AGENTS.md` or `CLAUDE.md` with at least one non-blank line, or a definition of done |
+| Verify command | 15 | A real command: `npm test`, `pytest`, `go test`, `cargo test`, `pnpm test`, `yarn test`, `make test`, `npm run lint`, `npm run typecheck`, `npm run test`. A dependency line (`pytest>=8.0`, `pytest[extras]`, anything in `requirements*.txt`) is not a command. |
+| Secret ignore | 10 | A `.gitignore` line that ignores `.env` itself: `.env`, `/.env`, `**/.env`, `.env*` or `*.env`. `.envrc`, `.env.example`, `!` un-ignore lines and comments don't count |
 | No inline secrets | 10 | At least one file was scanned and no secret was found. A secret is a key name assigned a quoted literal of 12+ characters, or an unquoted value in a `.env`-style file. Placeholders, paths, env-var names, and descriptor keys like `token_type` don't count |
 | Work isolation | 10 | Worktree, branch per, or isolated branch. "one branch" does not pass. *neg*, and "share a single worktree" does not pass |
-| Tool boundary | 15 | Allowlist, protected path, or cannot merge/push. *neg* |
+| Tool boundary | 15 | Allowlist, protected path, cannot merge/push, or a non-empty `allow`/`deny` list in `.claude/settings.json` or `.claude/settings.local.json`. *neg* |
 | Trace | 15 | Trace, audit log, tool call, or run log. *neg* |
-| Budget | 10 | Timeout, token budget, max minutes, or budget. *neg* |
+| Budget | 10 | Timeout, token budget, max minutes, spend cap, or budget. *neg* |
 
 ## Loop (100)
 
 | Check | Weight | Award | Passes when |
 |---|---:|---:|---|
 | Claim | 15 | 15 | Claim, in progress, lock file, or already taken, in docs or config. *neg* |
-| Attempt cap | 20 | 20 | A numeric retry or attempt cap: `max_attempts: 3`, `max 3 attempts`, `retry 2`. "max attempts" without a number does not pass. *neg* |
+| Attempt cap | 20 | 20 | A numeric retry or attempt cap: `max_attempts: 3`, `MAX_RETRIES = 3`, `stop_after_attempt(3)`, `max 3 attempts`, `retry 2`. A "token budget of N" is not an attempt cap. "max attempts" without a number does not pass. *neg* |
 | Evidence verify | 20 | 20 | A real test command plus a fail-closed phrase |
 | Fail closed | 15 | 15 | Fail closed, exit code, must pass, or non-zero, in docs or config |
 | Repeated error exit | 15 | 7 | Same error, same failure, twice, or stuck, in docs or config. Half until a fingerprint exists |
@@ -59,7 +59,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 |---|---:|---|
 | Named nodes | 20 | At least three of intake, triage, fix, review, gate, planner, executor, verifier, each on a line with an arrow (`->`, `-->`, `→`, `=>`) or the word node(s), or in backticks in a doc. Or three `add_node("…")` calls in code, any names. "Fix bugs, ask for review, pass the gate" does not pass |
 | Conditional edges | 15 | Tests passed, an edge (not "edge cases", "cutting edge"), or status ==, in docs or config. *neg*. Or `add_conditional_edges(` in code |
-| External state | 20 | `job_id` and `attempt` cited |
+| External state | 20 | `job_id`, `status` and `attempt` all found; all three lines cited |
 | Human gate | 15 | A gate phrase, and no unnegated auto-merge (any spelling or word form: automerge, auto merge, auto-merged, auto-merges, auto-merging, also inside identifiers such as allow_auto_merge or platformAutomerge), and no `merge ... --auto` on the same line, where backslash-continued lines count as one |
 | Ignore outcome | 10 | Ignore, wontfix, or not fixable in docs (*neg*). In config or code only an outcome value counts: `"ignored"`, `wontfix`, `not_fixable`. `# type: ignore` and a dependabot `ignore:` key do not pass |
 | Bounded cycle | 10 | Bounded (not "unbounded"), retry edge, or max attempts, in docs or config (*neg*). Or `recursion_limit` / `max_attempts = N` / `max_retries = N` in code |

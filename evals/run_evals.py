@@ -17,7 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-SCORER = Path(__file__).resolve().parent.parent / "scripts" / "score_setup.py"
+# EVAL_SCORER swaps in another scorer. Only the crash check below uses it.
+SCORER = Path(os.environ.get("EVAL_SCORER") or Path(__file__).resolve().parent.parent / "scripts" / "score_setup.py")
 
 # A README that names every keyword. Scores high on text, has no runner.
 STUFFED = (
@@ -43,7 +44,7 @@ def gate_case(line: str) -> dict[str, str]:
 
 
 # (name, files, expectations)
-# Expectation keys: final, running, harness, loop, graph, and pass:<check>/fail:<check>.
+# Expectation keys: final, running, harness, loop, graph, raw, graph_effective, and pass:<check>/fail:<check>.
 CASES = [
     # Baselines
     ("empty", {}, {"final": 0}),
@@ -69,6 +70,28 @@ CASES = [
      {"final": 97, "running": True}),
     ("real workflow", with_stuffed({".github/workflows/agent.yml": REAL_WF}),
      {"final": 97, "running": True}),
+
+    # Real state files (review item M1, with L1).
+    ("state: 324 KB file is parsed in full", with_stuffed({"state.json": json.dumps(
+        [{"job_id": f"job-{n:05d}", "status": "passed", "attempt": 1, "note": "x" * 40} for n in range(3000)])}),
+     {"final": 97, "running": True}),
+    ("state: jobs wrapper", with_stuffed({"state.json": json.dumps(
+        {"jobs": [{"job_id": "j1", "status": "failed", "attempt": 1}]})}),
+     {"final": 97, "running": True}),
+    ("state: records wrapper", with_stuffed({"jobs.json": json.dumps(
+        {"records": [{"job_id": "j1", "status": "failed", "attempt": 1}]})}),
+     {"final": 97, "running": True}),
+    ("state: items wrapper", with_stuffed({"state.json": json.dumps(
+        {"items": [{"job_id": "j1", "status": "failed", "attempt": 1}]})}),
+     {"final": 97, "running": True}),
+    ("state: jsonl", with_stuffed({"state.jsonl": (
+        '{"job_id": "j1", "status": "failed", "attempt": 1}\n{"job_id": "j2", "status": "open", "attempt": 0}\n')}),
+     {"final": 97, "running": True}),
+    ("state: wrapper with empty records is not a runner", with_stuffed({"state.json": json.dumps(
+        {"jobs": [{"job_id": None, "status": "failed", "attempt": 1}]})}),
+     {"final": 69, "running": False}),
+    ("state: 100k nested brackets does not crash", with_stuffed({"state.json": "[" * 100_000}),
+     {"final": 69, "running": False}),
 
     # Single-check bugs
     ("verifier word alone", {"README.md": "The verifier is a single word here.\n"},
@@ -243,6 +266,80 @@ CASES = [
     ("graph: conditional edge in docs", {"README.md": "Conditional edge: review -> gate when tests pass.\n"},
      {"pass:conditional edges": True}),
 
+    # .gitignore must ignore .env itself (review item L6).
+    ("gitignore: .envrc is not .env", {".gitignore": ".envrc\n"}, {"fail:secret ignore": True}),
+    ("gitignore: un-ignore line is not an ignore", {".gitignore": "!.env.example\n"}, {"fail:secret ignore": True}),
+    ("gitignore: comment is not an ignore", {".gitignore": "# keep .env out\n"}, {"fail:secret ignore": True}),
+    ("gitignore: .env.example alone", {".gitignore": ".env.example\n"}, {"fail:secret ignore": True}),
+    ("gitignore: .env", {".gitignore": "node_modules\n.env\n"}, {"pass:secret ignore": True}),
+    ("gitignore: /.env", {".gitignore": "/.env\n"}, {"pass:secret ignore": True}),
+    ("gitignore: .env*", {".gitignore": ".env*\n!.env.example\n"}, {"pass:secret ignore": True}),
+    ("gitignore: *.env", {".gitignore": "*.env\n"}, {"pass:secret ignore": True}),
+    ("gitignore: **/.env", {".gitignore": "**/.env\n"}, {"pass:secret ignore": True}),
+    ("gitignore: .env with trailing space", {".gitignore": ".env  \n"}, {"pass:secret ignore": True}),
+
+    # Instruction file and external state (review items D3, D4).
+    ("instruction: empty CLAUDE.md", {"CLAUDE.md": ""}, {"fail:instruction file": True}),
+    ("instruction: whitespace-only AGENTS.md", {"AGENTS.md": "\n  \n"}, {"fail:instruction file": True}),
+    ("instruction: CLAUDE.md with text", {"CLAUDE.md": "\nBe careful.\n"}, {"pass:instruction file": True}),
+    ("state: job_id and attempt without status", {"README.md": "Each record has a job_id and an attempt.\n"},
+     {"fail:external state": True}),
+    ("state: status alone", {"README.md": "Each record has a status.\n"}, {"fail:external state": True}),
+    ("state: all three words", {"README.md": "Each record has a job_id, a status and an attempt.\n"},
+     {"pass:external state": True}),
+
+    # Caps that change the result (review eval gaps). A real state file lifts the 69 ceiling,
+    # so only the cap under test can move the score.
+    ("cap: graph credit is limited to loop + 20", {
+        "state.json": '[{"job_id":"j1","status":"failed","attempt":1}]',
+        "README.md": "nodes: intake -> triage -> fix.\nIf tests passed, go on. human gate. ignore. bounded. join.\n"},
+     {"running": True, "harness": 10, "loop": 0, "graph": 100, "graph_effective": 20, "raw": 9, "final": 9}),
+    ("cap: graph credit within loop + 20 is not reduced", {
+        "state.json": '[{"job_id":"j1","status":"failed","attempt":1}]',
+        "README.md": STUFFED},
+     {"running": True, "graph_effective": 100}),
+    ("cap: harness under 40 caps the composite at 49", {
+        "state.json": '[{"job_id":"j1","status":"failed","attempt":1}]',
+        "README.md": (
+            "npm test. worktree per job. claim. max_attempts 3. fail closed. same error twice.\n"
+            "nodes: intake -> triage -> fix.\nIf tests passed, go on. human gate. ignore. bounded. join.\n"
+            "job_id status attempt.\n")},
+     {"running": True, "harness": 35, "raw": 77, "final": 49}),
+
+    # Runner detection is GitHub Actions only (review item M2, smaller option).
+    ("runner: langgraph path is not a workflow", with_stuffed({"langgraph/pipeline.yml": REAL_WF}),
+     {"final": 69, "running": False}),
+    ("runner: langgraph project is not a runner", with_stuffed({
+        "langgraph.json": '{"graphs": {"agent": "./agent.py:graph"}}',
+        "agent.py": "g = StateGraph(State)\n"}),
+     {"final": 69, "running": False}),
+    ("runner: gitlab ci is not recognised", with_stuffed({".gitlab-ci.yml": REAL_WF}),
+     {"final": 69, "running": False}),
+    ("runner: circleci is not recognised", with_stuffed({".circleci/config.yml": REAL_WF}),
+     {"final": 69, "running": False}),
+    ("runner: workflow.yml still counts", with_stuffed({"workflow.yml": REAL_WF}),
+     {"final": 97, "running": True}),
+
+    # Common real config (review item M3). False negatives: these must pass.
+    ("config: MAX_RETRIES constant", {"loop.py": "MAX_RETRIES = 3\n"}, {"pass:attempt cap": True}),
+    ("config: tenacity stop_after_attempt", {"loop.py": "@retry(stop=stop_after_attempt(3))\ndef call(): ...\n"},
+     {"pass:attempt cap": True}),
+    ("config: npm run test", {"README.md": "Run npm run test before merging.\n"}, {"pass:verify command": True}),
+    ("config: claude settings permissions", {".claude/settings.json": json.dumps(
+        {"permissions": {"allow": ["Bash(npm test)"], "deny": ["Read(./.env)"]}})},
+     {"pass:tool boundary": True}),
+    ("config: spend cap", {"README.md": "There is a spend cap of $5 per run.\n"}, {"pass:budget": True}),
+    # False positives: these must fail.
+    ("config: pytest dependency line", {"requirements-dev.txt": "pytest>=8.0\n"}, {"fail:verify command": True}),
+    ("config: pytest in pyproject dependencies", {"pyproject.toml": 'dependencies = ["pytest>=8.0"]\n'},
+     {"fail:verify command": True}),
+    ("config: token budget is not an attempt cap", {"README.md": "We have a token budget of 50000.\n"},
+     {"fail:attempt cap": True}),
+    ("config: empty claude permissions", {".claude/settings.json": '{"permissions": {"allow": [], "deny": []}}'},
+     {"fail:tool boundary": True}),
+    ("config: allow list outside .claude", {"cors.json": '{"allow": ["https://example.com"]}'},
+     {"fail:tool boundary": True}),
+
     # Found in Python's own stdlib (email/_header_value_parser.py) during review.
     ("secret: descriptor key token_type", {"parser.py": "    token_type = 'unstructured'\n"},
      {"pass:no inline secrets": True}),
@@ -258,11 +355,22 @@ def build(root: Path, files: dict[str, str]) -> None:
         path.write_text(text, encoding="utf-8")
 
 
-def score(root: Path) -> dict:
+# -E and -P keep PYTHON* variables and the current folder out of the scorer, as -I does,
+# but unlike -I they leave the user site visible, where `pip install --user pyyaml` puts it.
+SCORER_FLAGS = ["-E", "-P"]
+
+
+class ScorerCrash(Exception):
+    """The scorer exited non-zero. Fails the case that hit it, not the whole run."""
+
+
+def score(root: Path, env: dict | None = None) -> dict:
     out = subprocess.run(
-        [sys.executable, "-I", str(SCORER), "--target", str(root), "--json"],
-        capture_output=True, text=True, check=True,
+        [sys.executable, *SCORER_FLAGS, str(SCORER), "--target", str(root), "--json"],
+        capture_output=True, text=True, env=env,
     )
+    if out.returncode != 0:
+        raise ScorerCrash(f"scorer exit {out.returncode}: {out.stderr.strip()[-200:]}")
     return json.loads(out.stdout)
 
 
@@ -282,6 +390,8 @@ def evaluate(data: dict, expect: dict) -> list[str]:
         "harness": data["harness"]["score"],
         "loop": data["loop"]["score"],
         "graph": data["graph"]["score"],
+        "raw": data["composite"]["raw"],
+        "graph_effective": data["composite"]["graph_effective"],
     }
     for key, want in expect.items():
         if key in actual:
@@ -371,6 +481,162 @@ def symlinked_instructions(tmp: Path) -> list[str]:
     return [] if ok else ["instruction file: want pass, got fail"]
 
 
+def skill_frontmatter(tmp: Path) -> list[str]:
+    """SKILL.md frontmatter has only documented keys and names no other skill (item D6)."""
+    text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+    end = text.find("\n---", 3)
+    keys = {line.split(":", 1)[0] for line in text[3:end].splitlines() if line[:1].isalpha()}
+    errors = []
+    if keys != {"name", "description"}:
+        errors.append(f"frontmatter keys {sorted(keys)}, want ['description', 'name']")
+    if "harness-creator" in text:
+        errors.append("SKILL.md names harness-creator")
+    return errors
+
+
+def run_without_yaml(root: Path, *extra: str) -> subprocess.CompletedProcess:
+    """Run the scorer as if PyYAML were not installed."""
+    code = (
+        "import runpy, sys\n"
+        "sys.modules['yaml'] = None\n"  # makes `import yaml` raise ImportError
+        "sys.argv = sys.argv[1:]\n"
+        "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+    )
+    return subprocess.run([sys.executable, "-I", "-c", code, str(SCORER), "--target", str(root), *extra],
+                          capture_output=True, text=True)
+
+
+def yaml_missing_report(tmp: Path) -> list[str]:
+    """Without PyYAML the report says the runner is unconfirmed, not both capped and 'not missing' (item D5)."""
+    build(tmp, with_stuffed({".github/workflows/agent.yml": REAL_WF}))
+    out = run_without_yaml(tmp)
+    text = out.stdout
+    errors = []
+    if out.returncode != 0:
+        return [f"exit {out.returncode}: {out.stderr.strip()[-200:]}"]
+    if "runner check skipped: pyyaml not installed" not in text:
+        errors.append("report lacks the pyyaml note")
+    if "missing runner" in text:
+        errors.append("report says both 'no real runner' and 'not a missing runner'")
+    if "unconfirmed" not in text:
+        errors.append("report does not call the runner unconfirmed")
+    return errors
+
+
+def yaml_missing_score(tmp: Path) -> list[str]:
+    """Without PyYAML a workflow file stays fail-closed, a state file still counts, and no note without a workflow."""
+    errors = []
+    cases = {
+        "workflow file": (with_stuffed({".github/workflows/agent.yml": REAL_WF}), False, True),
+        "state file": (with_stuffed({"state.json": '[{"job_id":"j1","status":"failed","attempt":1}]'}), True, False),
+        "no workflow": (STUFFED_FILES, False, False),
+    }
+    for label, (files, running, note) in cases.items():
+        root = tmp / label.replace(" ", "-")
+        build(root, files)
+        out = run_without_yaml(root, "--json")
+        if out.returncode != 0:
+            errors.append(f"{label}: exit {out.returncode}")
+            continue
+        data = json.loads(out.stdout)
+        if data["running"] != running or bool(data["runner_note"]) != note:
+            errors.append(f"{label}: running {data['running']}, note {data['runner_note']!r}")
+    return errors
+
+
+def citations_computed_once(tmp: Path) -> list[str]:
+    """harness_checks computes each citation once (item L5)."""
+    if os.environ.get("EVAL_SCORER"):
+        raise Skip("the scorer is swapped out")
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("score_setup_probe", SCORER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    calls = {"instruction file": 0, "verify command": 0, "secret ignore": 0}
+    real_instruction, real_any, real_ignore = mod.instruction_cite, mod.cite_any, mod.gitignore_env_cite
+
+    def instruction(files):
+        calls["instruction file"] += 1
+        return real_instruction(files)
+
+    def cite_any(files, patterns):
+        if patterns == [mod.VERIFY_CMD_RE.pattern]:
+            calls["verify command"] += 1
+        return real_any(files, patterns)
+
+    def gitignore_env_cite(files):
+        calls["secret ignore"] += 1
+        return real_ignore(files)
+
+    mod.instruction_cite, mod.cite_any, mod.gitignore_env_cite = instruction, cite_any, gitignore_env_cite
+    mod.harness_checks([("CLAUDE.md", ["npm test"]), (".gitignore", [".env"])])
+    return [f"{name} computed {n} times" for name, n in calls.items() if n != 1]
+
+
+def crash_fails_one_case(tmp: Path) -> list[str]:
+    """A scorer crash fails the cases it hits instead of aborting the run (item L4).
+
+    Runs this file again with EVAL_SCORER pointing at a scorer that always crashes.
+    The inner run must finish, report FAIL lines and a summary, and exit 1.
+    """
+    if os.environ.get("EVAL_SCORER"):
+        raise Skip("already inside the crash check")
+    crasher = tmp / "crasher.py"
+    crasher.write_text("import sys\nsys.stderr.write('boom\\n')\nraise SystemExit(1)\n", encoding="utf-8")
+    out = subprocess.run([sys.executable, str(Path(__file__).resolve())], capture_output=True, text=True,
+                         env={**os.environ, "EVAL_SCORER": str(crasher)})
+    errors = []
+    if "Traceback" in out.stderr:
+        errors.append("the run died with a traceback")
+    if out.returncode != 1:
+        errors.append(f"exit {out.returncode}, want 1")
+    if "FAIL  empty:" not in out.stdout or " passed" not in out.stdout:
+        errors.append("no per-case FAIL line and summary")
+    return errors
+
+
+def user_site_pyyaml(tmp: Path) -> list[str]:
+    """PyYAML installed with `pip install --user` is visible to the scorer (item L2).
+
+    A stub yaml module in a throwaway user site claims every file is a workflow
+    with a runner. The scorer sees that only if it runs with the user site on.
+    """
+    home = tmp / "home"
+    home.mkdir()
+    env = {**os.environ, "HOME": str(home)}
+    site = subprocess.run([sys.executable, "-c", "import site; print(site.getusersitepackages())"],
+                          capture_output=True, text=True, check=True, env=env).stdout.strip()
+    build(Path(site), {"yaml.py": "def safe_load(text):\n    return {'jobs': {'x': {'runs-on': 'u'}}}\n"})
+    repo = tmp / "repo"
+    build(repo, {".github/workflows/x.yml": "not: a workflow\n"})
+    data = score(repo, env)
+    return [] if data["running"] else ["scorer did not import PyYAML from the user site"]
+
+
+def citation_of(root: Path, files: dict[str, str], check: str) -> str | None:
+    build(root, files)
+    data = score(root)
+    for layer in ("harness", "loop", "graph"):
+        for c in data[layer]["checks"]:
+            if c["name"] == check:
+                return c["citation"]
+    return None
+
+
+def external_state_citation(tmp: Path) -> list[str]:
+    """External state cites the job_id, status and attempt lines, not only job_id (item D4)."""
+    got = citation_of(tmp, {"notes.md": "job_id is the key.\nstatus is one of a few words.\nattempt counts from 0.\n"},
+                      "external state")
+    want = "notes.md:1, notes.md:2, notes.md:3"
+    return [] if got == want else [f"citation {got!r}, want {want!r}"]
+
+
+def empty_instruction_citation(tmp: Path) -> list[str]:
+    """An instruction file cites a line that exists (item D3)."""
+    got = citation_of(tmp, {"CLAUDE.md": "\n\nBe careful.\n"}, "instruction file")
+    return [] if got == "CLAUDE.md:3" else [f"citation {got!r}, want 'CLAUDE.md:3'"]
+
+
 SPECIAL = [
     *(repo_under(d) for d in ("artifacts", "build", "dist", "venv", "node_modules")),
     installed_skill("core files", ".claude/skills/agent-graph-audit", only_core=True),
@@ -380,6 +646,14 @@ SPECIAL = [
     installed_skill("plugin path", ".claude/plugins/x/skills/agent-graph-audit"),
     ("self scan reports skip", self_scan),
     ("symlinked CLAUDE.md outside repo", symlinked_instructions),
+    ("skill frontmatter is documented keys only", skill_frontmatter),
+    ("external state cites all three fields", external_state_citation),
+    ("harness citations computed once", citations_computed_once),
+    ("scorer crash fails one case, not the run", crash_fails_one_case),
+    ("pyyaml in the user site is visible", user_site_pyyaml),
+    ("pyyaml missing: report wording", yaml_missing_report),
+    ("pyyaml missing: score and note", yaml_missing_score),
+    ("instruction file cites a line that exists", empty_instruction_citation),
 ]
 
 
@@ -391,7 +665,10 @@ def main() -> int:
             root = Path(tmp) / f"case{i}"
             root.mkdir()
             build(root, files)
-            errors = evaluate(score(root), expect)
+            try:
+                errors = evaluate(score(root), expect)
+            except ScorerCrash as why:
+                errors = [str(why)]
             if errors:
                 failed += 1
                 print(f"FAIL  {name}: " + "; ".join(errors))
@@ -406,6 +683,8 @@ def main() -> int:
                 skipped += 1
                 print(f"skip  {name}: {why}")
                 continue
+            except ScorerCrash as why:
+                errors = [str(why)]
             if errors:
                 failed += 1
                 print(f"FAIL  {name}: " + "; ".join(errors))
