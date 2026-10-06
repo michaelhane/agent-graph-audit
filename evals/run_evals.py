@@ -17,7 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-SCORER = Path(__file__).resolve().parent.parent / "scripts" / "score_setup.py"
+# EVAL_SCORER swaps in another scorer. Only the crash check below uses it.
+SCORER = Path(os.environ.get("EVAL_SCORER") or Path(__file__).resolve().parent.parent / "scripts" / "score_setup.py")
 
 # A README that names every keyword. Scores high on text, has no runner.
 STUFFED = (
@@ -329,11 +330,17 @@ def build(root: Path, files: dict[str, str]) -> None:
 SCORER_FLAGS = ["-E", "-P"]
 
 
+class ScorerCrash(Exception):
+    """The scorer exited non-zero. Fails the case that hit it, not the whole run."""
+
+
 def score(root: Path, env: dict | None = None) -> dict:
     out = subprocess.run(
         [sys.executable, *SCORER_FLAGS, str(SCORER), "--target", str(root), "--json"],
-        capture_output=True, text=True, check=True, env=env,
+        capture_output=True, text=True, env=env,
     )
+    if out.returncode != 0:
+        raise ScorerCrash(f"scorer exit {out.returncode}: {out.stderr.strip()[-200:]}")
     return json.loads(out.stdout)
 
 
@@ -505,6 +512,28 @@ def yaml_missing_score(tmp: Path) -> list[str]:
     return errors
 
 
+def crash_fails_one_case(tmp: Path) -> list[str]:
+    """A scorer crash fails the cases it hits instead of aborting the run (item L4).
+
+    Runs this file again with EVAL_SCORER pointing at a scorer that always crashes.
+    The inner run must finish, report FAIL lines and a summary, and exit 1.
+    """
+    if os.environ.get("EVAL_SCORER"):
+        raise Skip("already inside the crash check")
+    crasher = tmp / "crasher.py"
+    crasher.write_text("import sys\nsys.stderr.write('boom\\n')\nraise SystemExit(1)\n", encoding="utf-8")
+    out = subprocess.run([sys.executable, str(Path(__file__).resolve())], capture_output=True, text=True,
+                         env={**os.environ, "EVAL_SCORER": str(crasher)})
+    errors = []
+    if "Traceback" in out.stderr:
+        errors.append("the run died with a traceback")
+    if out.returncode != 1:
+        errors.append(f"exit {out.returncode}, want 1")
+    if "FAIL  empty:" not in out.stdout or " passed" not in out.stdout:
+        errors.append("no per-case FAIL line and summary")
+    return errors
+
+
 def user_site_pyyaml(tmp: Path) -> list[str]:
     """PyYAML installed with `pip install --user` is visible to the scorer (item L2).
 
@@ -558,6 +587,7 @@ SPECIAL = [
     ("symlinked CLAUDE.md outside repo", symlinked_instructions),
     ("skill frontmatter is documented keys only", skill_frontmatter),
     ("external state cites all three fields", external_state_citation),
+    ("scorer crash fails one case, not the run", crash_fails_one_case),
     ("pyyaml in the user site is visible", user_site_pyyaml),
     ("pyyaml missing: report wording", yaml_missing_report),
     ("pyyaml missing: score and note", yaml_missing_score),
@@ -573,7 +603,10 @@ def main() -> int:
             root = Path(tmp) / f"case{i}"
             root.mkdir()
             build(root, files)
-            errors = evaluate(score(root), expect)
+            try:
+                errors = evaluate(score(root), expect)
+            except ScorerCrash as why:
+                errors = [str(why)]
             if errors:
                 failed += 1
                 print(f"FAIL  {name}: " + "; ".join(errors))
@@ -588,6 +621,8 @@ def main() -> int:
                 skipped += 1
                 print(f"skip  {name}: {why}")
                 continue
+            except ScorerCrash as why:
+                errors = [str(why)]
             if errors:
                 failed += 1
                 print(f"FAIL  {name}: " + "; ".join(errors))
