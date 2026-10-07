@@ -521,11 +521,20 @@ CLAIM_VERB_RE = re.compile(
     r"\bclaim(?:ed)?\s+(?:that\s+)?(?:they|he|she|we|i|you)\b|\bclaim(?:ed)?\s+to\s+(?:be|have)\b",
     re.I,
 )
+# "Photos of the build in progress" is prose, not a job status (item F10). "In progress" counts
+# only as a quoted value or on a line that talks about a status: status, state, mark, set, move, flag.
+IN_PROGRESS_STATUS_RE = re.compile(
+    r"[\"'`]in progress[\"'`]|\b(?:status(?:es)?|states?|mark(?:s|ed)?|sets?|mov(?:e|es|ed)|flag(?:s|ged)?)\b",
+    re.I,
+)
 
 
 def cite_claim(files: list[tuple[str, list[str]]]) -> str | None:
-    """Like cite_affirmed, but claim as a noun or verb for a statement is not evidence (items F2, F9)."""
+    """Like cite_affirmed, but claim as a noun or verb for a statement, and "in progress"
+    in plain prose, are not evidence (items F2, F9, F10)."""
     def hit(cre, line):
+        if cre.pattern == "in progress" and not IN_PROGRESS_STATUS_RE.search(line):
+            return False
         nouns = {m.end() for m in CLAIM_NOUN_RE.finditer(line)}
         verbs = {m.start() for m in CLAIM_VERB_RE.finditer(line)}
         return any(
