@@ -644,6 +644,23 @@ CASES = [
      {"README.md": "```python\ndef route(status):\n    if tests_ok:\n        return 'merge'\n"
                    "    elif status == 'failed':\n        return 'fix'\n```\n"},
      {"pass:conditional edges": True}),
+    # A timeout on one browser navigation or wait is not a run budget (item F23).
+    ("f23: page.goto timeout is not a run budget",
+     {"README.md": "```js\nawait page.goto(url, { timeout: 15000 });\n```\n"},
+     {"fail:budget": True}),
+    ("f23: page.waitForSelector timeout is not a run budget",
+     {"README.md": "```js\nawait page.waitForSelector('#x', { timeout: 5000 });\n```\n"},
+     {"fail:budget": True}),
+    ("f23: Python page.wait_for_selector timeout is not a run budget",
+     {"scraper.py": "page.wait_for_selector('#x', timeout=5000)\n"},
+     {"fail:budget": True}),
+    # Guards: an agent timeout in loop code still counts, also through asyncio.wait_for.
+    ("f23 ok: AGENT_TIMEOUT in loop.py",
+     {"loop.py": "AGENT_TIMEOUT = 600\n"},
+     {"pass:budget": True}),
+    ("f23 ok: asyncio.wait_for on the agent run in loop.py",
+     {"loop.py": "await asyncio.wait_for(run_agent(job), timeout=600)\n"},
+     {"pass:budget": True}),
 ]
 
 

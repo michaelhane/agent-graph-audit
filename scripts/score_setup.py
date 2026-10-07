@@ -768,6 +768,9 @@ HTTP_CALL_RE = re.compile(
     r"\b(?:urlopen|requests\.(?:get|post|put|patch|delete|head|request)|httpx\.\w+|aiohttp\.\w+|fetch)\s*\(",
     re.I,
 )
+# A browser navigation or wait on a page or frame (Playwright, Puppeteer): its timeout limits that step,
+# not an agent run (item F23). The receiver is required, so `asyncio.wait_for(…, timeout=600)` still counts.
+BROWSER_STEP_RE = re.compile(r"\b(?:page|frame)\.(?:goto|wait_?for\w*)\s*\(", re.I)
 
 
 def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
@@ -796,6 +799,7 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     # "Budget" alone ("cognitive budget", a `budget` form field) is not a run budget: it needs an amount
     # ("budget of 30", "$5 budget", "budget: 5"), a run scope ("budget per run") or a run noun before it (F13).
     # A timeout on one HTTP request (urlopen, requests.get, httpx, fetch) limits that call, not a run (F20).
+    # So does one on a browser step (page.goto, page.waitForSelector) (F23).
     budget = best_cite(
         files,
         [
@@ -808,7 +812,9 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
             r"\b(?:run|job|turn|cost|time|step|spend|usd|dollar|compute|attempt)\s+budget\b",
             r"spend cap",
         ],
-        lambda cre, line: not (cre.pattern == r"(?<![a-z])timeout" and HTTP_CALL_RE.search(line))
+        lambda cre, line: not (
+            cre.pattern == r"(?<![a-z])timeout" and (HTTP_CALL_RE.search(line) or BROWSER_STEP_RE.search(line))
+        )
         and any(not negated(line, m.start(), m.end()) for m in cre.finditer(line)),
     )
     checks = [
