@@ -683,6 +683,22 @@ CASES = [
     ("f25 ok: status == with the next step on the line",
      {"README.md": "When status == 'blocked', the next step is a person.\n"},
      {"pass:conditional edges": True}),
+    # A bare timeout without an agent or run context is not a run budget (item F26).
+    ("f26: subprocess timeout in a deploy snippet is not a run budget",
+     {"README.md": "```python\nsubprocess.run([sys.executable, 'deploy.py'],\n"
+                   "    capture_output=True, text=True, timeout=60)\n```\n"},
+     {"fail:budget": True}),
+    ("f26: a cache timeout setting is not a run budget",
+     {"settings.py": "CACHE_TIMEOUT = 300\n"},
+     {"fail:budget": True}),
+    # Guards: an agent or run context on the line or earlier in the statement still counts
+    # (AGENT_TIMEOUT and timeout-minutes: see f2 ok).
+    ("f26 ok: agent command on the first line of the call",
+     {"loop.py": "subprocess.run(agent_cmd,\n    capture_output=True, timeout=600)\n"},
+     {"pass:budget": True}),
+    ("f26 ok: each run has a timeout",
+     {"README.md": "Each run has a timeout of 10 minutes.\n"},
+     {"pass:budget": True}),
 ]
 
 
