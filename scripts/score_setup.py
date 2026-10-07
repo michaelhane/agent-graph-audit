@@ -697,7 +697,21 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
         ],
     )
     # A letter before "timeout" makes it a call or field name (setTimeout, clearTimeout), not a run budget (F2).
-    budget = cite_affirmed(files, [r"(?<![a-z])timeout", r"token budget", r"max minutes", r"\bbudget\b", r"spend cap"])
+    # "Budget" alone ("cognitive budget", a `budget` form field) is not a run budget: it needs an amount
+    # ("budget of 30", "$5 budget", "budget: 5"), a run scope ("budget per run") or a run noun before it (F13).
+    budget = cite_affirmed(
+        files,
+        [
+            r"(?<![a-z])timeout",
+            r"token budget",
+            r"max minutes",
+            r"\bbudget\s*(?:of|is|:|=)?\s*[$€]?\d",
+            r"\d\s*(?:usd|eur|dollars?|euros?)?\s+budget\b",
+            r"\bbudget\s+(?:per|for each)\s+(?:run|job|attempt|turn|task|agent)\b",
+            r"\b(?:run|job|turn|cost|time|step|spend|usd|dollar|compute|attempt)\s+budget\b",
+            r"spend cap",
+        ],
+    )
     checks = [
         (
             "instruction file",
