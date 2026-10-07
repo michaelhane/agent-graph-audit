@@ -792,6 +792,20 @@ JOIN_CONFIG_RE = r"\bneeds:\s*\[[^\]]*,"
 IGNORE_VALUE_RE = r"""["']ignored["']|\bwontfix\b|\bnot[_ -]fixable\b"""
 
 
+# "Cost is bounded", "Memory is strictly bounded": the subject of "is bounded" must be a
+# cycle, or nothing is said about the loop (item F2). "Retries are bounded" still counts.
+BOUNDED_SUBJECT_RE = re.compile(r"\b([\w-]+)\s+(?:is|are|was|were|stays?|remains?)\s+(?:[\w-]+\s+)?bounded\b", re.I)
+CYCLE_SUBJECT_RE = re.compile(r"(?:loops?|cycles?|retry|retries|attempts?|iterations?|rounds?|edges?|recursion)$", re.I)
+
+
+def cite_bounded(files: list[tuple[str, list[str]]]) -> str | None:
+    """Like cite_affirmed, but "X is bounded" counts only when X is a cycle (item F2)."""
+    def hit(cre, line):
+        other = {m.end() for m in BOUNDED_SUBJECT_RE.finditer(line) if not CYCLE_SUBJECT_RE.match(m.group(1))}
+        return any(not negated(line, m.start(), m.end()) and m.end() not in other for m in cre.finditer(line))
+    return best_cite(files, [r"\bbounded\b", r"retry edge", r"max attempts"], hit)
+
+
 def cite_cond_edge(files: list[tuple[str, list[str]]]) -> str | None:
     """Like cite_affirmed, but the word edge counts only on a line with a condition (item F2)."""
     def hit(cre, line):
@@ -856,7 +870,7 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
     ignore = cite_affirmed(docs, [r"(?<![-\w])ignore\b(?![-=])", r"wontfix", r"won't fix", r"not fixable"]) or cite_any(
         config + code, [IGNORE_VALUE_RE]
     )
-    bounded = cite_affirmed(prose, [r"\bbounded\b", r"retry edge", r"max attempts"]) or cite(code, BOUND_CODE_RE)
+    bounded = cite_bounded(prose) or cite(code, BOUND_CODE_RE)
     join = (
         # A method call such as names.join(', ') in a doc snippet is not a join.
         cite_affirmed(prose, [r"(?<!\.)\bjoin\b(?!\.\w|\()", r"wait for", r"partial diff"])
