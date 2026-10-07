@@ -514,13 +514,24 @@ CLAIM_NOUN_RE = re.compile(
     r"(?!\s+(?:file|lock|step|node|record|marker|token)s?\b)",
     re.I,
 )
+# "claim they created it", "claim that it works", "claim to be first": claim as a verb about
+# a statement (item F9). A subject pronoun or "to be/have" after it starts the statement.
+# "claim a job", "claim it" and "claimed by" are still job claims.
+CLAIM_VERB_RE = re.compile(
+    r"\bclaim(?:ed)?\s+(?:that\s+)?(?:they|he|she|we|i|you)\b|\bclaim(?:ed)?\s+to\s+(?:be|have)\b",
+    re.I,
+)
 
 
 def cite_claim(files: list[tuple[str, list[str]]]) -> str | None:
-    """Like cite_affirmed, but claim used as a noun for a statement is not evidence (item F2)."""
+    """Like cite_affirmed, but claim as a noun or verb for a statement is not evidence (items F2, F9)."""
     def hit(cre, line):
         nouns = {m.end() for m in CLAIM_NOUN_RE.finditer(line)}
-        return any(not negated(line, m.start(), m.end()) and m.end() not in nouns for m in cre.finditer(line))
+        verbs = {m.start() for m in CLAIM_VERB_RE.finditer(line)}
+        return any(
+            not negated(line, m.start(), m.end()) and m.end() not in nouns and m.start() not in verbs
+            for m in cre.finditer(line)
+        )
     return best_cite(files, CLAIM_PATTERNS, hit)
 
 
