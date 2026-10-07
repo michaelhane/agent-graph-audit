@@ -1011,6 +1011,13 @@ EDGE_WORD_RE = (
 # A "=== Status ===" banner is not a comparison (item F18): "===" counts only with a
 # space and a value after it, as in "status === 'failed'".
 STATUS_ROUTE_RE = r"""status ==(?:=(?=\s+[a-z'"]))?(?!=)(?!\s*\d)"""
+# A status comparison routes only with a branch or route word on the line (item F22):
+# a view filter "| Inbox | `status == "none"` |" is not an edge.
+STATUS_ROUTE_CONTEXT_RE = re.compile(
+    r"\b(?:if|elif|when|unless|else|otherwise|then|case|rout(?:e|es|ed|ing)|go(?:es)?\s+(?:back|to)|goto|edges?)\b"
+    r"|->|=>|→|\?\s",
+    re.I,
+)
 # An edge is conditional only with a condition on the same line (item F2):
 # "3397 edges" or "Edge-cache is on" is not one. A number right before "edges" is a
 # count and never counts, even next to a condition word (item F11).
@@ -1043,6 +1050,8 @@ def cite_cond_edge(files: list[tuple[str, list[str]]]) -> str | None:
     """Like cite_affirmed, but the word edge counts only on a line with a condition (item F2)."""
     def hit(cre, line):
         if cre.pattern == EDGE_WORD_RE and not EDGE_CONDITION_RE.search(line):
+            return False
+        if cre.pattern == STATUS_ROUTE_RE and not STATUS_ROUTE_CONTEXT_RE.search(line):
             return False
         return any(not negated(line, m.start(), m.end()) for m in cre.finditer(line))
     return best_cite(files, [r"tests passed", EDGE_WORD_RE, STATUS_ROUTE_RE], hit)
