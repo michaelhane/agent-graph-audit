@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 276 cases in total (one skips in a plain venv; the lab's `make test` gives 275/275 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 279 cases in total (one skips in a plain venv; the lab's `make test` gives 278/278 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 276 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 279 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 276/276
+python3 evals/run_evals.py                       # expect 279/279
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -100,6 +100,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F19 | "Join" with a group as its object no longer passes the join check: `join` followed by the/a/an/this/that/my/your and a group noun (club, community, group, team, society, association, guild, movement, crowd, ranks, cause, party, mailing list, newsletter, waitlist, waiting list, server, discord, slack, forum, channel) does not count ("Pay a membership fee to join the club."). F12's "why join", "join us" and "join our …" are unchanged, so "Join our community." already failed before the fix. By the pattern (no eval case), a group noun not in the list ("join the choir") or with an adjective between ("join the local club") still passes. Four new cases (the two fixtures from the item, and two guards that passed before the fix: "The merge step waits for both reviews to join." and "Both branches meet at a join node."); only the club case failed before the fix: 270 cases; the lab's `make test` gives 269/269 (1 skipped). |
 | F20 | A timeout on one HTTP request no longer passes the budget check: `timeout` does not count on a line with an HTTP client call (`urlopen(`, `requests.get(` and the other `requests` verbs, `httpx.…(`, `aiohttp.…(`, `fetch(`). A timeout on anything else still counts (`AGENT_TIMEOUT = 600`, `timeout-minutes: 30`, `subprocess.run(agent_cmd, timeout=600)`). Two new cases (the fixture from the item, and the guard `subprocess.run(agent_cmd, timeout=600)` in `loop.py`, which passed before the fix; the item's other guards were already pinned by the F2 cases): 268 cases; the lab's `make test` gives 267/267 (1 skipped). |
 | F21 | A cap in code counts for the attempt cap check only in a file with agent context: `agent(s)`, `job(s)`, `fix`/`fixes`/`fixed`/`fixing`, `worker(s)` or `escalate`/`escalation` as a word in the file (an `_` or non-letter around it is fine, so `escalate(job)` and `run_fix(` count), or one of those or `loop(s)` in its path (`loop.py`). A shrink-to-fit loop under `src/js/` and `MAX_ATTEMPTS = 50` in an image generator script no longer count. Docs and config are unchanged, and F15's UI-folder rule stays. This narrows decision 4 for this check: `MAX_PIPE_ATTEMPTS = 20` in code counts only next to such a word. By the pattern (no eval case), camelCase (`runJob`) is not a word match. Four new cases (the two fixtures from the item, and two guards that passed before the fix: `MAX_ATTEMPTS = 3` with `escalate(job)` in `loop.py`, and `MAX_RETRIES = 3` in `src/runner.py` that runs `run_fix(job, …)`): 274 cases; the lab's `make test` gives 273/273 (1 skipped). |
+| F22 | A status filter in a view table no longer passes the conditional edges check: a `status ==` comparison counts only with a branch or route word on the same line (if, elif, when, unless, else, otherwise, then, case, route, go back/to, goto, edge), an arrow (`->`, `=>`, `→`) or a ternary `? `. So `` | Inbox | `status == "none"` | `` fails, while "If status == failed, the edge goes back to fix." and `elif status == 'failed':` still pass. Three new cases (the fixture from the item, the item's guard, and an `elif` router in a README code block; both guards passed before the fix): 275 cases; the lab's `make test` gives 274/274 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -245,7 +246,7 @@ Found in the field check after F15: F15 skips UI code by folder name (`site/`, `
 - Fixture: `src/js/render.js` with `while (tooTall() && attempts < 12) { attempts++; }`. Expected: attempt cap fails. Also `scripts/generate.py` with `MAX_ATTEMPTS = 50` and `while made < n and attempts < MAX_ATTEMPTS:` and no job, fix or agent on those lines.
 - Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
 
-### F22. A view filter `status == "none"` counts as a conditional edge
+### F22. A view filter `status == "none"` counts as a conditional edge: done (see section 4)
 Found in the field check after F18: "conditional edges" passes on a design-doc table row `| Inbox | \`status == "none"\` |`, a list filter, through `STATUS_ROUTE_RE`, which accepts any `status == "<word>"` without a routing context.
 - Fixture: `README.md` with the table `| View | Filter |` / `| Inbox | \`status == "none"\` |`. Expected: conditional edges fails.
 - Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
@@ -259,6 +260,11 @@ Found in the field check after F20: "budget" passes on `await page.goto('{url}',
 Found in the field check after F21: an image generator script still passes "attempt cap" on `MAX_ATTEMPTS = 50`, because the agent-word test looks at the whole file and its docstring says "Zone approach: fixed hierarchy at top" ("fixed" as in not variable). The word has to be near the cap, not anywhere in the file.
 - Fixture: `scripts/generate.py` with a docstring "Fixed layout at the top." and, 30 lines later, `MAX_ATTEMPTS = 50` and `while made < n and attempts < MAX_ATTEMPTS:`. Expected: attempt cap fails.
 - Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
+
+### F25. Conditional edges: `status ==` without a routing context
+Found in the field check after F22: with the table row gone, "conditional edges" passes on `if status == 'none':` inside a counting function in a plan's code block. This is the fourth `status ==` false pass on the same repo (F11, F18, F22): each narrow fix moves the citation to the next line. The root cause is that `status ==` counts as routing on its own. It should count only with a routing context on the line (the word edge, route, goes to, back to, next step, or a node name).
+- Fixture: `README.md` with a code block holding `if status == 'none':` / `    inbox += 1`. Expected: conditional edges fails.
+- Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
 
 ### Known limits (accepted for now, documented in README)
 

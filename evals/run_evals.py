@@ -632,6 +632,18 @@ CASES = [
     ("f21 ok: MAX_RETRIES in code that runs fix jobs",
      {"src/runner.py": "MAX_RETRIES = 3\nfor job in queue:\n    run_fix(job, MAX_RETRIES)\n"},
      {"pass:attempt cap": True}),
+    # A view filter on status is not a route (item F22).
+    ("f22: status filter in a view table is not a conditional edge",
+     {"README.md": "| View | Filter |\n|---|---|\n| Inbox | `status == \"none\"` |\n"},
+     {"fail:conditional edges": True}),
+    # Guards: a status comparison with a routing context still counts (also f18 ok cases).
+    ("f22 ok: status == failed routes back to fix",
+     {"README.md": "If status == failed, the edge goes back to fix.\n"},
+     {"pass:conditional edges": True}),
+    ("f22 ok: elif status == in a router",
+     {"README.md": "```python\ndef route(status):\n    if tests_ok:\n        return 'merge'\n"
+                   "    elif status == 'failed':\n        return 'fix'\n```\n"},
+     {"pass:conditional edges": True}),
 ]
 
 
