@@ -45,7 +45,7 @@ The report gives the composite, the three layer scores, the next missing check t
 python3 evals/run_evals.py
 ```
 
-218 cases. Each one is a bypass or bug found in review, for example:
+224 cases. Each one is a bypass or bug found in review, for example:
 
 - an empty `state.json` lifting the ceiling
 - a workflow comment counted as a job
@@ -67,7 +67,7 @@ Run the tests after any change to a pattern.
 - It matches text. A determined author can write a README that scores well. The 69 ceiling and the runner checks make that harder, not impossible.
 - Any CI job with `runs-on` or `steps` counts as a runner, even a plain lint workflow.
 - Runner detection is GitHub Actions only: `.github/workflows/*` and files named `workflow.yml` or `workflow.yaml`. GitLab CI (`.gitlab-ci.yml`), CircleCI (`.circleci/config.yml`) and LangGraph projects (`langgraph.json`) are not recognised. A `state.json` or `jobs.json` record is the way to show a runner for those.
-- The human gate is a phrase check. It fails on unnegated auto-merge in any spelling, including inside identifiers (`allow_auto_merge`, `platformAutomerge`, `enablePullRequestAutoMerge`), but a pass does not prove who can merge. Check branch protection yourself.
+- The human gate is a phrase check, or a review-gate config check (a config file named for a gate or review, such as `hooks/review-gate.json`, with `"mode": "ask"` or `"confirm"`). It fails on unnegated auto-merge in any spelling, including inside identifiers (`allow_auto_merge`, `platformAutomerge`, `enablePullRequestAutoMerge`), but a pass does not prove who can merge. Check branch protection yourself.
 - Negations other than "no" ("never auto-merge") fail the gate, and so does a setting turned off (`allow_auto_merge: false`). This is deliberate: when unsure, it fails closed. The check's `why` field names the line it found.
 - Auto-merge in another sense also fails the gate, for example a library option named `auto_merge` or a `GetAutoMergingPreview` API. That mostly shows up in vendored code; `node_modules` and `.venv` are already skipped.
 - `merge ... --auto` is matched per command line. Lines ending in a backslash are joined first. A command split some other way (for example a YAML folded `>` block) is not joined.
