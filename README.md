@@ -37,7 +37,7 @@ python3 scripts/score_setup.py --target /path/to/repo
 python3 scripts/score_setup.py --target /path/to/repo --json
 ```
 
-The report gives the composite, the three layer scores, the next missing check to add, any caps that fired, whether a runner was found, and any folders skipped because they are this skill. Every passing check cites the file and line it matched.
+The report gives the composite, the three layer scores, the next missing check to add, any caps that fired, whether a runner was found, and any folders skipped because they are this skill. Every passing check cites the file and line it matched. When several lines match, it cites state and config files first, then `CLAUDE.md`/`AGENTS.md`, then docs, then code, and a comment, a `.gitignore` line or a make target only when nothing better matches.
 
 ## Tests
 
@@ -45,7 +45,7 @@ The report gives the composite, the three layer scores, the next missing check t
 python3 evals/run_evals.py
 ```
 
-164 cases. Each one is a bypass or bug found in review, for example:
+168 cases. Each one is a bypass or bug found in review, for example:
 
 - an empty `state.json` lifting the ceiling
 - a workflow comment counted as a job
