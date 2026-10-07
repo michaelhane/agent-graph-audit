@@ -261,6 +261,11 @@ Found in the field check after F21: an image generator script still passes "atte
 - Fixture: `scripts/generate.py` with a docstring "Fixed layout at the top." and, 30 lines later, `MAX_ATTEMPTS = 50` and `while made < n and attempts < MAX_ATTEMPTS:`. Expected: attempt cap fails.
 - Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
 
+### F25. Conditional edges: `status ==` without a routing context
+Found in the field check after F22: with the table row gone, "conditional edges" passes on `if status == 'none':` inside a counting function in a plan's code block. This is the fourth `status ==` false pass on the same repo (F11, F18, F22): each narrow fix moves the citation to the next line. The root cause is that `status ==` counts as routing on its own. It should count only with a routing context on the line (the word edge, route, goes to, back to, next step, or a node name).
+- Fixture: `README.md` with a code block holding `if status == 'none':` / `    inbox += 1`. Expected: conditional edges fails.
+- Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
