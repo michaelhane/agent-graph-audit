@@ -165,6 +165,11 @@ Found in the same field check: "claim" passes on a blog post's "photos of the to
 - Fixture: `README.md` "Photos of the build in progress." Expected: claim fails.
 - Guard: a state file `jobs.json` with `"status": "in progress"` still passes.
 
+### F11. "status ==" from an HTTP check counts as a conditional edge
+Found in the field check after F2 conditional edges: "conditional edges" passes on `if resp.status == 200:` in a Python snippet inside a `.claude/commands/*.md`, through the `status ==` pattern in `cite_cond_edge`, which does not need the word edge.
+- Fixture: `README.md` with a code block holding `if resp.status == 200:`. Expected: conditional edges fails.
+- Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
