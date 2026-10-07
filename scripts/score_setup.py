@@ -139,7 +139,12 @@ VERIFY_CMD_RE = re.compile(
     r"|\b(?:python3?|node|bash|sh)\s+(?:-\S+\s+)*[\w./-]*(?<![a-z])(?:tests?|spec)[\w./-]*\.(?:py|[cm]?[jt]s|sh)\b)",
     re.I,
 )
-FAIL_CLOSED_RE = re.compile(r"(fail closed|exit code|must pass|non-zero)", re.I)
+# non-zero counts only on a line about an exit or status ("exits non-zero",
+# "a non-zero status stops the job"), not as a number ("a non-zero count").
+NONZERO_CONTEXT = r"\b(?:exit(?:s|ed|ing)?|return(?:s|ed|ing)?|status|code|fail(?:s|ed|ing|ure)?|abort(?:s|ed)?|stop(?:s|ped)?)\b"
+FAIL_CLOSED_RE = re.compile(
+    rf"(fail closed|exit code|must pass|{NONZERO_CONTEXT}.*non-zero|non-zero.*{NONZERO_CONTEXT})", re.I
+)
 # Auto-merge in any spelling: auto-merge, auto merge, automerge, allow_auto_merge,
 # platformAutomerge, enablePullRequestAutoMerge. No word boundaries around it, so
 # underscores and camelCase can't hide it. Only a preceding "no " or "no-" negates;

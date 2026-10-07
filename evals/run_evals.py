@@ -457,6 +457,14 @@ CASES = [
     # Guards: a comparison against a number and a keyword argument still count.
     ("f2 ok: loop while attempts < 3", {"loop.js": "while (attempts < 3) {\n"}, {"pass:attempt cap": True}),
     ("f2 ok: attempts=3 argument", {"loop.py": "run(job, attempts=3)\n"}, {"pass:attempt cap": True}),
+    # A non-zero number is not a failing exit (F2 fail closed).
+    ("f2: non-zero count is not fail closed", {"README.md": "Report a non-zero count.\n"},
+     {"fail:fail closed": True}),
+    # Guards: a non-zero exit or status still counts.
+    ("f2 ok: exits non-zero on failure", {"README.md": "The verify step exits non-zero on any failure.\n"},
+     {"pass:fail closed": True}),
+    ("f2 ok: non-zero status stops the job", {"README.md": "A non-zero status stops the job.\n"},
+     {"pass:fail closed": True}),
 ]
 
 
