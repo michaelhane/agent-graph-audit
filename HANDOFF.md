@@ -267,6 +267,11 @@ Found in the field check after F22: with the table row gone, "conditional edges"
 - Fixture: `README.md` with a code block holding `if status == 'none':` / `    inbox += 1`. Expected: conditional edges fails.
 - Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
 
+### F26. Budget: a bare `timeout` without an agent or run context
+Found in the field check after F23: with the browser timeout gone, "budget" passes on `capture_output=True, text=True, timeout=60`, the last line of a `subprocess.run([...])` call in a plan's code block. This is the third timeout false pass on the same repo (F20 HTTP, F23 browser, now subprocess): each narrow fix moves the citation. The root cause is that a bare `timeout` counts as a run budget. It should count only with an agent or run context on the line or the statement (agent, run, job, turn, `claude`, `timeout-minutes`, or a name like `AGENT_TIMEOUT`).
+- Fixture: `README.md` with a code block holding `subprocess.run([sys.executable, 'deploy.py'],` / `    capture_output=True, text=True, timeout=60)`. Expected: budget fails.
+- Guard: `loop.py` with `AGENT_TIMEOUT = 600`, and a workflow with `timeout-minutes: 30`, still pass.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
