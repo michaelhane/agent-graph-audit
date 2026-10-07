@@ -501,6 +501,24 @@ CASES = [
     ("f5 ok: config gate with auto-merge fails", {"hooks/review-gate.json": '{"mode": "ask"}\n',
                                                  "README.md": "Dependabot PRs use auto-merge.\n"},
      {"fail:human gate": True}),
+    # Dutch key names count as secret keys (decision 8, item F6).
+    ("f6: wachtwoord literal in markdown", {"README.md": "# Setup\n\nwachtwoord: \"Zomer2024-abcdefghij\"\n"},
+     {"fail:no inline secrets": True}),
+    ("f6: api_sleutel literal", {"config.json": '{"api_sleutel": "sk-proj-abcdefghijklmnopqrstuvwxyz"}\n'},
+     {"fail:no inline secrets": True}),
+    ("f6: GEHEIM in .env", {".env": "APP_GEHEIM=abcdefghij0123456789\n"},
+     {"fail:no inline secrets": True}),
+    # Guards: Dutch placeholders, paths, env-var names and unquoted prose values still pass (decision 7).
+    ("f6 ok: Dutch placeholder", {".env.example": "WACHTWOORD=jouw_wachtwoord_hier\n"},
+     {"pass:no inline secrets": True}),
+    ("f6 ok: wachtwoord file path", {"config.py": 'wachtwoord_bestand = "/etc/app/wachtwoord.txt"\n'},
+     {"pass:no inline secrets": True}),
+    ("f6 ok: wachtwoord env-var name", {"config.json": '{"wachtwoord": "APP_WACHTWOORD"}\n'},
+     {"pass:no inline secrets": True}),
+    ("f6 ok: unquoted wachtwoord in prose", {"README.md": "wachtwoord: staat in de kluis van het team\n"},
+     {"pass:no inline secrets": True}),
+    ("f6 ok: geheime is not geheim", {"config.py": 'geheimeTaal = "abcdefghijklmnop"\n'},
+     {"pass:no inline secrets": True}),
 ]
 
 
@@ -979,6 +997,25 @@ def prefilter_keeps_case_and_unicode(tmp: Path) -> list[str]:
     return errors
 
 
+def dutch_secret_cites_line_only(tmp: Path) -> list[str]:
+    """A Dutch-keyed secret is cited by file:line, and the value is in neither report (item F6)."""
+    value = "Zomer2024-abcdefghij"
+    build(tmp, {"README.md": f"# Setup\n\nwachtwoord: \"{value}\"\n"})
+    errors = []
+    data = score(tmp)
+    checks = {c["name"]: c for layer in ("harness", "loop", "graph") for c in data[layer]["checks"]}
+    got = checks["no inline secrets"]["citation"]
+    if got != "README.md:3":
+        errors.append(f"citation {got!r}, want 'README.md:3'")
+    if value in json.dumps(data):
+        errors.append("value appears in the JSON report")
+    md = subprocess.run([sys.executable, *SCORER_FLAGS, str(SCORER), "--target", str(tmp)],
+                        capture_output=True, text=True)
+    if value in md.stdout:
+        errors.append("value appears in the Markdown report")
+    return errors
+
+
 SPECIAL = [
     *(repo_under(d) for d in ("artifacts", "build", "dist", "venv", "node_modules")),
     installed_skill("core files", ".claude/skills/agent-graph-audit", only_core=True),
@@ -1004,6 +1041,7 @@ SPECIAL = [
     ("a review-gate config is cited before a README gate", config_gate_cited),
     ("3,000 files score in under 10 s", large_repo_speed),
     ("prefilter keeps uppercase and non-ASCII matches", prefilter_keeps_case_and_unicode),
+    ("a Dutch-keyed secret is cited without its value", dutch_secret_cites_line_only),
 ]
 
 

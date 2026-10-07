@@ -79,8 +79,9 @@ TEXT_SUFFIXES = {
 }
 
 # Secret check. A key name holds the keyword, and the keyword is not followed by a
-# letter, so SECRET_KEY counts and tokenizer does not.
-SECRET_KEY_PART = r"(?P<key>[A-Za-z0-9_]*(?:api[_-]?key|secret|token|password)(?![a-z])[A-Za-z0-9_]*)"
+# letter, so SECRET_KEY counts and tokenizer does not. Dutch key names count too (decision 8).
+SECRET_WORDS = r"api[_-]?key|secret|token|password|api[_-]?sleutel|wachtwoord|geheim"
+SECRET_KEY_PART = r"(?P<key>[A-Za-z0-9_]*(?:" + SECRET_WORDS + r")(?![a-z])[A-Za-z0-9_]*)"
 SECRET_VALUE = r"(?P<value>[A-Za-z0-9_\-./+=]{12,})"
 # Anywhere: key, then = or : (not ==), then a quoted literal with a closing quote.
 SECRET_QUOTED_RE = re.compile(
@@ -98,7 +99,7 @@ NON_SECRET_KEY_ENDINGS = {
     "len", "length", "field", "header", "prefix", "kind", "id", "format", "mode", "style",
 }
 PLACEHOLDER_RE = re.compile(
-    r"(your[_-]|[_-]here$|replace|changeme|change[_-]me|placeholder|dummy|redacted|x{6,})",
+    r"(your[_-]|[_-]here$|jouw[_-]|[_-]hier$|replace|changeme|change[_-]me|placeholder|dummy|redacted|x{6,})",
     re.I,
 )
 ENV_VAR_NAME_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
@@ -634,7 +635,7 @@ def not_a_secret(key: str, value: str) -> bool:
 
 
 # Both secret patterns need one of these words in the key; a file without one is skipped (item F8).
-SECRET_WORD_RE = re.compile(r"api[_-]?key|secret|token|password", re.I)
+SECRET_WORD_RE = re.compile(SECRET_WORDS, re.I)
 
 
 def secret_hit(files: list[tuple[str, list[str]]]) -> str | None:
