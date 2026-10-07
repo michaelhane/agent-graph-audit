@@ -45,7 +45,7 @@ The report gives the composite, the three layer scores, the next missing check t
 python3 evals/run_evals.py
 ```
 
-160 cases. Each one is a bypass or bug found in review, for example:
+164 cases. Each one is a bypass or bug found in review, for example:
 
 - an empty `state.json` lifting the ceiling
 - a workflow comment counted as a job
@@ -77,7 +77,7 @@ Run the tests after any change to a pattern.
 - The secret check is a pattern check, not a secret scanner. It flags a key name (`api_key`, `secret`, `token`, `password`) assigned a quoted literal of 12+ characters anywhere, or an unquoted value in `.env`, `.env.*`, `*.env` and `.envrc` files. It ignores placeholders (`your_…`, `…_here`, `xxxxxx`, `changeme`), file paths, environment-variable names like `OPENAI_API_KEY`, and keys that describe a secret rather than hold one (`token_type`, `secret_name`, `token_url`). Use a dedicated secret scanner if you need real assurance.
 - Folders that are this skill are skipped and listed in the report. A folder counts as this skill if its `SKILL.md` frontmatter has `name: agent-graph-audit` (quoted or not), or if it has `scripts/score_setup.py` and `references/rubric.md`. Installing the skill in a repo therefore doesn't inflate that repo's score. Scoring this folder itself returns 0% with a "Skipped" note.
 - Folders in the skip list (`node_modules`, `.git`, `build`, `dist`, `vendor`, `third_party`, `site-packages`, `target`, tool caches, …) and any folder holding `pyvenv.cfg` are never entered. License files are not read. Only folders below the target are checked, so a repo that itself lives inside a `build/` folder still scans. Symlinked files are read; symlinked folders are not followed.
-- `.claude/worktrees/` (Claude Code's copies of the repo) is never entered. Paths that a `.gitignore` at or below the target ignores are not read, with two consequences: an ignored `.env` does not fail "no inline secrets", and state files (`state.json`, `jobs.json`, `state.jsonl`, `jobs.jsonl`) are still read inside ignored folders. Ignore matching is simple, not a full gitignore engine: globs, `!`, a trailing `/` and anchoring `/` are understood. Global excludes and `.git/info/exclude` are not read.
+- `.claude/worktrees/` (Claude Code's copies of the repo) is never entered. Paths that a `.gitignore` at or below the target ignores are not read, with two consequences: an ignored `.env` does not fail "no inline secrets", and state files (`state.json`, `jobs.json`, `state.jsonl`, `jobs.jsonl`) are still read inside ignored folders. `.claude/settings.json` and `.claude/settings.local.json` are also read when ignored, because Claude reads them on that machine; nothing else under an ignored `.claude/` is. Ignore matching is simple, not a full gitignore engine: globs, `!`, a trailing `/` and anchoring `/` are understood. Global excludes and `.git/info/exclude` are not read.
 
 See [`references/failure-modes.md`](references/failure-modes.md) for patterns that should lower your trust in a high score.
 
