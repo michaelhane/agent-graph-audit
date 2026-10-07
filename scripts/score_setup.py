@@ -583,7 +583,16 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     boundary = cite_affirmed(files, [r"allowlist", r"protected path", r"cannot merge", r"cannot push"]) or permissions_cite(
         files
     )
-    trace = cite_affirmed(files, [r"\btrace\b", r"audit log", r"tool call", r"run log"])
+    # "Trace the bug back": trace as a verb with an object or "back/down" is debugging, not a record of runs (F2).
+    trace = cite_affirmed(
+        files,
+        [
+            r"\btrace\b(?!\s+(?:the|a|an|this|that|these|those|it|its|them|their|our|your|back|down)\b)",
+            r"audit log",
+            r"tool call",
+            r"run log",
+        ],
+    )
     # A letter before "timeout" makes it a call or field name (setTimeout, clearTimeout), not a run budget (F2).
     budget = cite_affirmed(files, [r"(?<![a-z])timeout", r"token budget", r"max minutes", r"\bbudget\b", r"spend cap"])
     checks = [

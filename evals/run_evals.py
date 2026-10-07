@@ -436,6 +436,12 @@ CASES = [
      {"pass:repeated error exit": True}),
     ("f2 ok: same error ends the job", {"README.md": "The same error on two attempts ends the job.\n"},
      {"pass:repeated error exit": True}),
+    # Trace as a debugging verb is not a place runs are recorded (F2 trace).
+    ("f2: trace the bug back is not a trace", {"README.md": "Trace the bug back to the parser.\n"},
+     {"fail:trace": True}),
+    # Guards: a trace as a record of runs still counts.
+    ("f2 ok: each run writes a trace", {"README.md": "Each run writes a trace to runs/.\n"}, {"pass:trace": True}),
+    ("f2 ok: trace files", {"README.md": "Trace files live in traces/.\n"}, {"pass:trace": True}),
 ]
 
 
