@@ -193,6 +193,11 @@ Found in the field check after F2 repeated error exit: a coaching doc passes "re
 - Fixture: `README.md` "If they're stuck, give a nudge." Expected: repeated error exit fails.
 - Guard: `README.md` "When a job is stuck on the same error twice, stop and escalate." still passes.
 
+### F15. A numeric loop bound in UI code counts as an attempt cap
+Found in the field check after F2 attempt cap: a site renderer passes "attempt cap" on `while (el.scrollHeight > frameH + 2 && attempts < 12) {`, a shrink-to-fit loop, through `attempt(?:s)?\s*[:=<]\s*\d`. It bounds a layout loop, not an agent's fix attempts.
+- Fixture: `site/js/render.js` with `var attempts = 0;` and `while (tooTall() && attempts < 12) { attempts++; }`. Expected: attempt cap fails.
+- Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
