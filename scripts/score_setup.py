@@ -101,11 +101,12 @@ PLACEHOLDER_RE = re.compile(
     re.I,
 )
 ENV_VAR_NAME_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
-# A numeric cap. "max attempts" alone (no number) no longer counts.
+# A numeric cap. "max attempts" alone (no number) no longer counts, and neither does
+# a counter that starts at 0 ("var attempts = 0").
 ATTEMPT_RE = re.compile(
     r"(max[_\s-]?(?:attempts|retries)(?:\s*(?:of|is|to|at)?\s*|[^\n\d]{0,20}?[:=]\s*)\d"
     r"|\bstop_after_attempt\(\s*\d"
-    r"|attempt(?:s)?\s*[:=<]\s*\d"
+    r"|attempt(?:s)?\s*[:=<]\s*(?!0\b)\d"
     r"|retry(?:\s+cap)?\s*(?:of|at|<=|:)?\s*\d"
     r"|\bmax(?:imum)?\s+(?:of\s+)?\d+\s+(?:attempts|retries|tries)\b)",
     re.I,

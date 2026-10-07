@@ -452,6 +452,11 @@ CASES = [
      {"pass:bounded cycle": True}),
     ("f2 ok: retries are always bounded", {"README.md": "Retries are always bounded per job.\n"},
      {"pass:bounded cycle": True}),
+    # A counter that starts at 0 is not a cap (F2 attempt cap).
+    ("f2: attempts counter at 0 is not a cap", {"loop.js": "var attempts = 0\n"}, {"fail:attempt cap": True}),
+    # Guards: a comparison against a number and a keyword argument still count.
+    ("f2 ok: loop while attempts < 3", {"loop.js": "while (attempts < 3) {\n"}, {"pass:attempt cap": True}),
+    ("f2 ok: attempts=3 argument", {"loop.py": "run(job, attempts=3)\n"}, {"pass:attempt cap": True}),
 ]
 
 
