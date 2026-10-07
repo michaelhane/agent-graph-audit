@@ -194,6 +194,8 @@ def is_this_skill(folder: Path, dirnames: list[str], filenames: list[str]) -> bo
 
 # Claude Code's per-session copies of the repo: the same text again, cited twice.
 WORKTREE_COPIES = (".claude", "worktrees")
+# Claude reads these on the machine even when .gitignore lists them (item F1b).
+CLAUDE_SETTINGS = {"settings.json", "settings.local.json"}
 
 
 def gitignore_rules(folder: Path, rel: str) -> list[tuple[str, str, bool, bool, bool]]:
@@ -247,9 +249,9 @@ def iter_files(root: Path, skipped: list[str] | None = None):
     One top-down walk. SKIP_DIRS, .claude/worktrees/ and copies of this skill are
     pruned before they are entered, and only names below root are tested, so a
     repo that lives inside a folder called build/ still scans. Paths a .gitignore
-    at or below root ignores are not read, except state files: real loops often
-    ignore their state folder. Symlinked files are read; symlinked folders are
-    not followed.
+    at or below root ignores are not read, except state files (real loops often
+    ignore their state folder) and .claude/settings*.json (Claude still reads
+    them). Symlinked files are read; symlinked folders are not followed.
     """
     if root.is_file():
         yield root
@@ -288,7 +290,8 @@ def iter_files(root: Path, skipped: list[str] | None = None):
             if path.name.split(".")[0].upper() in LICENSE_STEMS:
                 continue
             file_rel = f"{rel}/{fname}" if rel else fname
-            if fname not in STATE_NAMES and (in_ignored or is_ignored(rules, file_rel, False)):
+            kept = fname in STATE_NAMES or (folder.name == ".claude" and fname in CLAUDE_SETTINGS)
+            if not kept and (in_ignored or is_ignored(rules, file_rel, False)):
                 continue
             if is_scanned_file(path) and path.is_file():
                 yield path

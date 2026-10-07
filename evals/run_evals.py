@@ -359,6 +359,18 @@ CASES = [
      {".gitignore": ".env\n", ".env": "API_KEY=abcdefghij0123456789\n"}, {"pass:no inline secrets": True}),
     ("scope: .env that is not ignored is still read",
      {".gitignore": "node_modules\n", ".env": "API_KEY=abcdefghij0123456789\n"}, {"fail:no inline secrets": True}),
+
+    # Ignored Claude settings still count (field-test item F1b); nothing else under an ignored .claude/ does.
+    ("scope: gitignored .claude/settings.json still counts",
+     {".gitignore": ".claude/\n", ".claude/settings.json": '{"permissions": {"allow": ["Read"]}}'},
+     {"pass:tool boundary": True}),
+    ("scope: gitignored .claude/settings.local.json still counts",
+     {".gitignore": ".claude/\n", ".claude/settings.local.json": '{"permissions": {"deny": ["Bash"]}}'},
+     {"pass:tool boundary": True}),
+    ("scope: other files in a gitignored .claude/ are not evidence",
+     {".gitignore": ".claude/\n", ".claude/settings.json": '{"permissions": {"allow": ["Read"]}}',
+      ".claude/notes.md": "human gate\n"},
+     {"fail:human gate": True}),
 ]
 
 
@@ -677,6 +689,24 @@ def out_of_scope_files(tmp: Path) -> list[str]:
     return errors
 
 
+def ignored_claude_settings(tmp: Path) -> list[str]:
+    """Gitignored .claude/settings.json is read and cited; .claude/notes.md is not (item F1b)."""
+    build(tmp, {".gitignore": ".claude/\n", ".claude/settings.json": '{"permissions": {"allow": ["Read"]}}',
+                ".claude/notes.md": "human gate\n"})
+    data = score(tmp)
+    errors = []
+    checks = {c["name"]: c for layer in ("harness", "loop", "graph") for c in data[layer]["checks"]}
+    got = checks["tool boundary"]["citation"] or ""
+    if not got.startswith(".claude/settings.json:"):
+        errors.append(f"tool boundary citation {got!r}, want .claude/settings.json")
+    cited = [c["citation"] for c in checks.values() if c["citation"] and ".claude/notes.md" in c["citation"]]
+    if cited:
+        errors.append(f"cites .claude/notes.md: {cited}")
+    if data["files_scanned"] != 2:
+        errors.append(f"files_scanned {data['files_scanned']}, want 2 (.gitignore, settings.json)")
+    return errors
+
+
 SPECIAL = [
     *(repo_under(d) for d in ("artifacts", "build", "dist", "venv", "node_modules")),
     installed_skill("core files", ".claude/skills/agent-graph-audit", only_core=True),
@@ -695,6 +725,7 @@ SPECIAL = [
     ("pyyaml missing: score and note", yaml_missing_score),
     ("instruction file cites a line that exists", empty_instruction_citation),
     ("gitignored and worktree copies are not scanned", out_of_scope_files),
+    ("gitignored .claude/settings.json is read and cited", ignored_claude_settings),
 ]
 
 
