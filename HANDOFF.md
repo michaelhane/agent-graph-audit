@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 218 cases in total (218/218 with the system Python; one skips in a plain venv).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 224 cases in total (224/224 with the system Python; one skips in a plain venv).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 218 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 224 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 218/218
+python3 evals/run_evals.py                       # expect 224/224
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -84,6 +84,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F2 attempt cap | A counter that starts at 0 no longer passes the attempt cap check: in the `attempt(s)` followed by `:`, `=` or `<` form, the number may not be `0` ("`var attempts = 0`"). `while (attempts < 3)` and `attempts=3` as an argument still count, and so do `max_attempts`, `MAX_RETRIES = 3` and `stop_after_attempt(3)`. By the pattern (no eval case), a counter that starts at 1 (`attempts = 1`) still passes. Three new cases (the fixture from the item, and those two guards): 201 cases; the lab's `make test` gives 200/200 (1 skipped). |
 | F2 fail closed | `non-zero` passes the fail closed check only on a line that also says exit, return, status, code, fail/failure, abort or stop ("Report a non-zero count." no longer counts). "Exits non-zero", "a non-zero status stops the job", "fail closed", "exit code" and "must pass" are unchanged. Three new cases (the fixture from the item, and two guards: "The verify step exits non-zero on any failure." and "A non-zero status stops the job." still pass): 205 cases; the lab's `make test` gives 204/204 (1 skipped). |
 | F4 | Dutch evidence (decision 8). Human gate also accepts "zonder akkoord" and "wacht/wachten op akkoord"; fail closed also accepts "faalt dicht" and "stop/stopt/stoppen bij de eerste fout". The negation window also has the Dutch negators niet, geen, nooit and zonder, so "We gebruiken geen worktree." and "Agents draaien zonder timeout." no longer count. Auto-merge still fails a Dutch gate (decision 3). Only negators *before* a keyword are Dutch; the after-the-match form ("wordt niet gebruikt") is English only. Ten new cases (eight fixtures from the item, and two guards: "Elke job krijgt een eigen worktree." still passes, and "zonder akkoord" next to auto-merge still fails the gate): 218 cases; the lab's `make test` gives 217/217 (1 skipped). |
+| F5 | A review-gate config counts as a human gate (decision 9): a config file (not a doc or code) whose name has `gate` or `review`, such as `hooks/review-gate.json` or `config/review-gate.yml`, with `mode` set to `ask` or `confirm`. It is cited before a gate phrase, because it is stronger evidence than a README sentence. Auto-merge anywhere still fails the gate (decision 3). Six new cases (the two fixtures, three guards: `"mode": "auto"` is no gate, `"mode": "ask"` in an unrelated `editor.json` is no gate, and a config gate next to auto-merge still fails; and a citation check that the config wins over a README gate): 224 cases; the lab's `make test` gives 223/223 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -155,7 +156,7 @@ Each line below is a README sentence that passes today and should fail.
 - fail closed: "faalt dicht", "stop bij de eerste fout".
 - The negation window also needs Dutch negators: niet, geen, nooit, zonder.
 
-### F5. Config gate (decision 9)
+### F5. Config gate (decision 9): done (see section 4)
 A review-gate config such as `hooks/review-gate.json` with `"mode": "ask"` counts as a human gate.
 
 ### F8. Speed on large repos

@@ -163,6 +163,10 @@ GATE_PHRASES = [
     r"human gate", r"human node", r"human merge", r"no auto-merge", r"merge stays manual",
     r"\bzonder akkoord\b", r"\bwacht(?:t|en)? op akkoord\b",
 ]
+# A review-gate config (decision 9): a config file named for a gate or review, such as
+# hooks/review-gate.json, with a mode of ask or confirm. Stronger than a README sentence.
+GATE_CONFIG_NAME_RE = re.compile(r"gate|review", re.I)
+GATE_MODE_RE = r"""["']?\bmode["']?\s*[:=]\s*["']?(?:ask|confirm)\b"""
 
 CLAIM_CEILING = 69  # policy backstop, removed when evidence tiers ship
 GRAPH_SLACK = 20  # policy: graph credit cannot exceed loop + 20
@@ -869,12 +873,13 @@ def external_state_cite(files: list[tuple[str, list[str]]]) -> str | None:
 
 
 def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
-    gate_phrase = cite_any(files, GATE_PHRASES)
+    gate_configs = [f for f in of_kind(files, "config") if GATE_CONFIG_NAME_RE.search(Path(f[0]).name)]
+    gate_phrase = cite(gate_configs, GATE_MODE_RE) or cite_any(files, GATE_PHRASES)
     auto_merge = auto_merge_cite(files)
     if auto_merge:
         gate_why = f"Auto-merge found at {auto_merge}. Phrase check, not a permission check."
     else:
-        gate_why = "A gate phrase, and no unnegated auto-merge. Phrase check, not a permission check."
+        gate_why = "A gate phrase or a review-gate config in ask/confirm mode, and no unnegated auto-merge. Phrase check, not a permission check."
     found, node_cite = node_names(files)
     prose = of_kind(files, "doc", "config")
     docs = of_kind(files, "doc")

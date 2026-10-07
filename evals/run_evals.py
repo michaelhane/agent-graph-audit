@@ -487,6 +487,19 @@ CASES = [
      {"pass:work isolation": True, "pass:isolated workspace": True}),
     ("f4 ok: zonder akkoord with auto-merge fails", gate_case("Niets zonder akkoord, maar Dependabot gebruikt auto-merge."),
      {"fail:human gate": True}),
+    # A review-gate config with an ask or confirm mode is a human gate (decision 9, item F5).
+    ("f5: review-gate.json mode ask is a human gate", {"hooks/review-gate.json": '{\n  "mode": "ask"\n}\n'},
+     {"pass:human gate": True}),
+    ("f5: review-gate.yml mode confirm is a human gate", {"config/review-gate.yml": "mode: confirm\n"},
+     {"pass:human gate": True}),
+    # Guards: another mode is no gate, a mode in an unrelated config is no gate, and auto-merge still fails.
+    ("f5 ok: review-gate.json mode auto is no gate", {"hooks/review-gate.json": '{"mode": "auto"}\n'},
+     {"fail:human gate": True}),
+    ("f5 ok: mode ask in an unrelated config is no gate", {"editor.json": '{"mode": "ask"}\n'},
+     {"fail:human gate": True}),
+    ("f5 ok: config gate with auto-merge fails", {"hooks/review-gate.json": '{"mode": "ask"}\n',
+                                                 "README.md": "Dependabot PRs use auto-merge.\n"},
+     {"fail:human gate": True}),
 ]
 
 
@@ -877,6 +890,13 @@ def data_json_ranks_below_docs(tmp: Path) -> list[str]:
     return errors
 
 
+def config_gate_cited(tmp: Path) -> list[str]:
+    """A review-gate config is stronger gate evidence than a README sentence, so it is cited (item F5)."""
+    got = citation_of(tmp, {"README.md": "We have a human gate.\n",
+                            "hooks/review-gate.json": '{\n  "mode": "ask"\n}\n'}, "human gate")
+    return [] if got == "hooks/review-gate.json:2" else [f"citation {got!r}, want 'hooks/review-gate.json:2'"]
+
+
 def windows_stdout_utf8(tmp: Path) -> list[str]:
     """The markdown report is UTF-8 even when stdout defaults to cp1252, as on Windows (item F7)."""
     build(tmp, {"CLAUDE.md": "Be careful.\n"})
@@ -920,6 +940,7 @@ SPECIAL = [
     ("the best matching line is cited", best_line_cited),
     ("report is UTF-8 on a cp1252 stdout", windows_stdout_utf8),
     ("data .json ranks below docs", data_json_ranks_below_docs),
+    ("a review-gate config is cited before a README gate", config_gate_cited),
 ]
 
 
