@@ -385,6 +385,10 @@ CASES = [
     # Guards: claiming a job, and a claim file or lock, still count.
     ("f2 ok: workers claim a job", {"README.md": "Workers claim a job before they start.\n"}, {"pass:claim": True}),
     ("f2 ok: the claim file", {"README.md": "The claim file holds the job id.\n"}, {"pass:claim": True}),
+    # A method call in a code snippet in a doc is not a join (F2 join).
+    ("f2: names.join in a doc snippet is not a join", {"README.md": "`names.join(', ')`\n"}, {"fail:join": True}),
+    # Guard: a backticked join node still counts.
+    ("f2 ok: the `join` node", {"README.md": "The `join` node merges both branches.\n"}, {"pass:join": True}),
     # A test script run directly is a verify command (field-test item F3c).
     ("verify: python test script", {"CLAUDE.md": "Tests: `python tests/test_gate.py`\n"},
      {"pass:verify command": True}),
