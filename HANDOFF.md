@@ -111,6 +111,16 @@ Found in a field test after F1: a repo whose `.gitignore` lists `.claude/` lost 
 - "Work isolation" and "isolated workspace" cite a Makefile comment that mentions a worktree, while the README says the fix node makes a fresh worktree per attempt. Expected: a sentence that states the rule wins over an incidental mention.
 - General rule for F3: when several lines match, prefer config and state files, then instruction files, then docs. Never cite a comment, an ignore line or a make target when a better line exists.
 
+### F3b. Data files rank as config
+Found in the field check after F3: the ranking treats any `.json` as config, so a data dump or a code snippet stored as JSON wins over a doc sentence. Seen: "claim" cited from a 4,000-line image-review backup, "budget" from an archived code snippet. A permission entry like `Bash(git -C … worktree list)` in `.claude/settings.local.json` is cited for work isolation, though it only allows a read-only git command.
+- Config means known config files: `.claude/settings*.json`, `pyproject.toml`, `package.json`, `Makefile`, `*.yml`/`*.yaml`/`*.toml`/`*.ini`/`*.cfg`, `.github/workflows/*`, hook configs (`hooks*.json`). Other `.json` ranks as data, below docs.
+- Fixtures: `backup/data.json` with a `"claim"` string plus `README.md` "Each job is claimed by one worker." Expected: claim cites `README.md:1`. And `.claude/settings.local.json` allowing `Bash(git worktree list)` plus `README.md` "Each job runs in its own worktree." Expected: work isolation cites `README.md:1`.
+
+### F3c. Verify commands written as plain script calls
+After F3 stopped reading `.gitignore`, one repo lost "verify command" although its `CLAUDE.md` says "Tests: `python tests/test_x.py` and `node tests/test_y.js`". A real test command, but not in the known list.
+- Fixture: `CLAUDE.md` with "Tests: `python tests/test_gate.py`". Expected: verify command passes. Also `node tests/x.test.js` and `bash tests/run.sh`.
+- Guard: "We should add tests some day." still fails.
+
 ### F7. Windows report encoding: done (see section 4)
 On Windows, stdout is written as cp1252, so `—` becomes byte `0x97`. Fixture: run the scorer without `PYTHONIOENCODING` and decode stdout as UTF-8. Fix: reconfigure stdout to UTF-8.
 
