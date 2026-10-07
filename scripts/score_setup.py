@@ -531,10 +531,13 @@ def may_match(pattern: str, lines: list[str]) -> bool:
     return any(lit in low for lit in literals)
 
 
-def best_cite(files: list[tuple[str, list[str]]], patterns: list[str], hit, with_next: bool = False) -> str | None:
+def best_cite(
+    files: list[tuple[str, list[str]]], patterns: list[str], hit, with_next: bool = False, with_lines: bool = False
+) -> str | None:
     """The best line where hit(compiled pattern, line) is true.
 
     With with_next, hit also gets the next line ("" after the last line).
+    With with_lines, hit also gets all lines of the file and the 0-based index of the line.
 
     Files are tried in file_rank order, so the first strong line is the best one. A weak
     line is kept as a fallback and cited only if no strong line matches anywhere. Every
@@ -554,7 +557,13 @@ def best_cite(files: list[tuple[str, list[str]]], patterns: list[str], hit, with
             if not (fast.search(low) if fast and low is not None else whole.search(text)):
                 continue
             for i, line in enumerate(lines, start=1):
-                if hit(cre, line, lines[i] if i < len(lines) else "") if with_next else hit(cre, line):
+                if (
+                    hit(cre, line, lines, i - 1)
+                    if with_lines
+                    else hit(cre, line, lines[i] if i < len(lines) else "")
+                    if with_next
+                    else hit(cre, line)
+                ):
                     if not weak_line(name, line):
                         return f"{name}:{i}"
                     fallback = fallback or f"{name}:{i}"
@@ -788,6 +797,31 @@ HTTP_CALL_RE = re.compile(
 # A browser navigation or wait on a page or frame (Playwright, Puppeteer): its timeout limits that step,
 # not an agent run (item F23). The receiver is required, so `asyncio.wait_for(…, timeout=600)` still counts.
 BROWSER_STEP_RE = re.compile(r"\b(?:page|frame)\.(?:goto|wait_?for\w*)\s*\(", re.I)
+# An agent or run context for a timeout (item F26): agent, run, job, turn or claude as a word (an `_` or
+# non-letter around it is fine, so AGENT_TIMEOUT and run_agent( count), or timeout-minutes. A `.run(`
+# method call (subprocess.run, asyncio.run) is not a run context.
+TIMEOUT_CONTEXT_RE = re.compile(
+    r"(?<![a-z])(?:agents?|runs?|running|jobs?|turns?|claude)(?![a-z])(?<!\.run)|timeout-minutes", re.I
+)
+# A line that ends open: the statement goes on, on the next line.
+CONTINUED_RE = re.compile(r"[(\[{,\\]\s*$")
+
+
+def statement_lines(lines: list[str], idx: int, limit: int = 10) -> list[str]:
+    """The line at idx plus the earlier lines of its statement (lines that end in an open bracket, a comma
+    or a backslash), at most limit of them."""
+    start = idx
+    while start > 0 and idx - start < limit and CONTINUED_RE.search(lines[start - 1]):
+        start -= 1
+    return lines[start : idx + 1]
+
+
+def timeout_in_context(line: str, lines: list[str], idx: int) -> bool:
+    """A timeout counts as a run budget only with an agent or run context in its statement (F26), and not
+    on one HTTP request (F20) or one browser step (F23)."""
+    if HTTP_CALL_RE.search(line) or BROWSER_STEP_RE.search(line):
+        return False
+    return any(TIMEOUT_CONTEXT_RE.search(s) for s in statement_lines(lines, idx))
 
 
 def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
@@ -817,6 +851,8 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     # ("budget of 30", "$5 budget", "budget: 5"), a run scope ("budget per run") or a run noun before it (F13).
     # A timeout on one HTTP request (urlopen, requests.get, httpx, fetch) limits that call, not a run (F20).
     # So does one on a browser step (page.goto, page.waitForSelector) (F23).
+    # A timeout needs an agent or run context in its statement (F26): `timeout=60` on a deploy script's
+    # subprocess call is not a run budget, while AGENT_TIMEOUT and timeout-minutes are.
     budget = best_cite(
         files,
         [
@@ -829,10 +865,9 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
             r"\b(?:run|job|turn|cost|time|step|spend|usd|dollar|compute|attempt)\s+budget\b",
             r"spend cap",
         ],
-        lambda cre, line: not (
-            cre.pattern == r"(?<![a-z])timeout" and (HTTP_CALL_RE.search(line) or BROWSER_STEP_RE.search(line))
-        )
+        lambda cre, line, lines, idx: (cre.pattern != r"(?<![a-z])timeout" or timeout_in_context(line, lines, idx))
         and any(not negated(line, m.start(), m.end()) for m in cre.finditer(line)),
+        with_lines=True,
     )
     checks = [
         (
