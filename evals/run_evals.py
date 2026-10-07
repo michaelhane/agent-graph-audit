@@ -574,6 +574,14 @@ CASES = [
      {"pass:repeated error exit": True}),
     ("f14 ok: stuck job is parked", {"README.md": "A job that stays stuck is parked for a human.\n"},
      {"pass:repeated error exit": True}),
+    # A counter bound in UI code is a layout loop, not an attempt cap (item F15).
+    ("f15: shrink-to-fit loop in UI code is not a cap",
+     {"site/js/render.js": "var attempts = 0;\nwhile (tooTall() && attempts < 12) { attempts++; }\n"},
+     {"fail:attempt cap": True}),
+    # Guard: a named cap in loop code still counts.
+    ("f15 ok: MAX_ATTEMPTS in loop.py",
+     {"loop.py": "MAX_ATTEMPTS = 3\nif attempts >= MAX_ATTEMPTS: escalate(job)\n"},
+     {"pass:attempt cap": True}),
 ]
 
 
