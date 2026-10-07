@@ -10,6 +10,7 @@ which cites the scan itself.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -191,17 +192,70 @@ def is_this_skill(folder: Path, dirnames: list[str], filenames: list[str]) -> bo
     return False
 
 
+# Claude Code's per-session copies of the repo: the same text again, cited twice.
+WORKTREE_COPIES = (".claude", "worktrees")
+
+
+def gitignore_rules(folder: Path, rel: str) -> list[tuple[str, str, bool, bool, bool]]:
+    """Simple .gitignore rules in folder: (base, pattern, negated, dir_only, anchored).
+
+    Not a full gitignore engine: glob patterns via fnmatch, `!`, a trailing `/`,
+    and a leading or inner `/` that anchors the pattern to its folder.
+    """
+    try:
+        text = (folder / ".gitignore").read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return []
+    rules = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        negate = line.startswith("!")
+        line = line.lstrip("!")
+        if line.startswith("**/"):
+            line = line[3:]
+        dir_only = line.endswith("/")
+        line = line.rstrip("/")
+        anchored = "/" in line
+        line = line.lstrip("/")
+        if line:
+            rules.append((rel, line, negate, dir_only, anchored))
+    return rules
+
+
+def is_ignored(rules: list[tuple[str, str, bool, bool, bool]], rel: str, is_dir: bool) -> bool:
+    """True if the last rule that matches rel (a path below root) ignores it."""
+    ignored = False
+    for base, pattern, negate, dir_only, anchored in rules:
+        if base:
+            if not rel.startswith(base + "/"):
+                continue
+            sub = rel[len(base) + 1:]
+        else:
+            sub = rel
+        if dir_only and not is_dir:
+            continue
+        if fnmatch.fnmatchcase(sub if anchored else sub.rsplit("/", 1)[-1], pattern):
+            ignored = not negate
+    return ignored
+
+
 def iter_files(root: Path, skipped: list[str] | None = None):
     """Yield scanned files under root.
 
-    One top-down walk. SKIP_DIRS and copies of this skill are pruned before they
-    are entered, and only names below root are tested, so a repo that lives
-    inside a folder called build/ still scans. Symlinked files are read;
-    symlinked folders are not followed.
+    One top-down walk. SKIP_DIRS, .claude/worktrees/ and copies of this skill are
+    pruned before they are entered, and only names below root are tested, so a
+    repo that lives inside a folder called build/ still scans. Paths a .gitignore
+    at or below root ignores are not read, except state files: real loops often
+    ignore their state folder. Symlinked files are read; symlinked folders are
+    not followed.
     """
     if root.is_file():
         yield root
         return
+    rules_at: dict[str, list] = {}
+    ignored_dirs: set[str] = set()
     for dirpath, dirnames, filenames in os.walk(root):
         folder = Path(dirpath)
         if folder != root and VENV_MARKER in filenames:
@@ -213,10 +267,28 @@ def iter_files(root: Path, skipped: list[str] | None = None):
                 skipped.append(rel if rel != "." else ".")
             dirnames[:] = []
             continue
-        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
+        rel = folder.relative_to(root).as_posix()
+        rel = "" if rel == "." else rel
+        rules = rules_at.get(rel, [])
+        if ".gitignore" in filenames:
+            rules = rules + gitignore_rules(folder, rel)
+        in_ignored = rel in ignored_dirs
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if d not in SKIP_DIRS and (folder.name, d) != WORKTREE_COPIES
+        )
+        # Ignored folders are still walked, but only their state files are read.
+        for d in dirnames:
+            sub = f"{rel}/{d}" if rel else d
+            rules_at[sub] = rules
+            if in_ignored or is_ignored(rules, sub, True):
+                ignored_dirs.add(sub)
         for fname in sorted(filenames):
             path = folder / fname
             if path.name.split(".")[0].upper() in LICENSE_STEMS:
+                continue
+            file_rel = f"{rel}/{fname}" if rel else fname
+            if fname not in STATE_NAMES and (in_ignored or is_ignored(rules, file_rel, False)):
                 continue
             if is_scanned_file(path) and path.is_file():
                 yield path
