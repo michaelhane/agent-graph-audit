@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 262 cases in total (one skips in a plain venv; the lab's `make test` gives 261/261 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 266 cases in total (one skips in a plain venv; the lab's `make test` gives 265/265 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 262 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 266 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 262/262
+python3 evals/run_evals.py                       # expect 266/266
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -96,6 +96,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F16 | English parity for "stop bij de eerste fout" (decision 8): fail closed also accepts "stop/stops/stopping at/on the first error/failure" ("Stop at the first error.", "The pipeline stops on the first failure."). "First error" without a stop rule still fails. Three new cases (the fixture from the item in `CLAUDE.md`, the "stops on the first failure" form, and the guard "The first error was a typo.", which passed before the fix): 260 cases; the lab's `make test` gives 259/259 (1 skipped). |
 | F15 | A bare attempt counter in UI code no longer passes the attempt cap check: in a file under a `site`, `web`, `www`, `public`, `static`, `frontend`, `ui`, `components` or `assets` folder, the `attempt(s)` followed by `:`, `=` or `<` form does not count (`while (tooTall() && attempts < 12)` bounds a layout loop). Named caps (`MAX_ATTEMPTS = 3`, `max_retries: 3`, `stop_after_attempt(3)`) still count there, and the counter form still counts everywhere else. Two new cases (the fixture from the item, and the guard `MAX_ATTEMPTS = 3` with `if attempts >= MAX_ATTEMPTS: escalate(job)` in `loop.py`, which passed before the fix): 256 cases; the lab's `make test` gives 255/255 (1 skipped). |
 | F18 | A "=== Status ===" banner no longer passes the conditional edges check: `status ==` followed by another `=` does not count (`print('=== Review Status ===')`). JS's `status ===` still counts when a space and a value follow it (`status === 'failed'`); a number after it still never counts (F11). Three new cases (the fixture from the item, and two guards that passed before the fix: "If status == failed, the edge goes back to fix." and `if (job.status === 'failed') goTo('fix');` in a JS code block): 265 cases; the lab's `make test` gives 264/264 (1 skipped). |
+| F17 | Speed on denser filler. On 3,000 files of 200 lines of lorem ipsum the scorer took 13.0 s in the lab's `make test` (venv, Python 3.12); `report()` in-process now takes about 2.7 s under cProfile (was 13.6 s). Almost all the time was in `re` searches of whole files for patterns that start with an alternation or a lookahead (fail closed, repeated error, attempt cap, budget), which the regex engine tries at every position. Each pattern is now parsed once (`re._parser`) into a set of lowercase strings, one of which any match must contain (a literal run, a required group, every branch of an alternation, a repeat with a minimum of 1; the most selective set wins). A file whose lowercased ASCII text holds none of them is skipped with `in` before any regex runs (`may_match`, used by `best_cite`, `secret_hit` and `node_names`). It is only a necessary condition: non-ASCII files, and patterns with nothing required, take the old path, and the per-line check is unchanged. One new case: the timing case (3,000 lorem ipsum files under 10 s, with every check's pass/fail and citation pinned to the output before the fix, including matches at lines 120, 150 and 180 of one file). Only the timing part failed before the fix. 263 cases; the lab's `make test` gives 262/262 (1 skipped). Not measured on the lab host's 17.7 s field repo itself. |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -217,7 +218,7 @@ Found in the field check after F4: a `CLAUDE.md` now passes "fail closed" on the
 - Fixture: `CLAUDE.md` "Stop at the first error." Expected: fail closed passes, like the Dutch line.
 - Guard: `README.md` "The first error was a typo." still fails.
 
-### F17. Speed target on denser filler
+### F17. Speed target on denser filler: done (see section 4)
 Found in the field check after F8: on a synthetic repo of 3,000 committed files of 200 lines of lorem ipsum, the scorer took 95.8 s before F8 and 17.7 s after it (same output) on the lab host. That is the same 5x gain F8 reports, but above the 10 s target. F8's 6 s was measured on its own fixture.
 - Fixture: a timing script that builds that repo and runs the scorer once. Expected: under 10 s on the lab host, output unchanged.
 

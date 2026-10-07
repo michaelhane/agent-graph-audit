@@ -440,6 +440,70 @@ def prefilter_pattern(pattern: str) -> str:
     return LEADING_ASSERTIONS_RE.sub("", pattern)
 
 
+try:
+    from re import _parser as _re_parser
+except ImportError:  # Python before 3.11
+    import sre_parse as _re_parser
+_REPEATS = {_re_parser.MAX_REPEAT, _re_parser.MIN_REPEAT, getattr(_re_parser, "POSSESSIVE_REPEAT", None)}
+
+
+def _literal_sets(items) -> frozenset[str] | None:
+    """Lowercase ASCII strings, one of which every match of the parsed sequence contains.
+
+    Each literal run, mandatory group, branch and repeat with a minimum of 1 gives a candidate
+    set; the most selective one (longest shortest string) wins. None if nothing is required.
+    """
+    candidates = []
+    run = ""
+    for op, av in items:
+        if op == _re_parser.LITERAL and av < 128:
+            run += chr(av).lower()
+            continue
+        if run:
+            candidates.append(frozenset([run]))
+            run = ""
+        found = None
+        if op == _re_parser.SUBPATTERN:
+            found = _literal_sets(av[3])
+        elif op == getattr(_re_parser, "ATOMIC_GROUP", None):
+            found = _literal_sets(av)
+        elif op in _REPEATS:
+            if av[0] >= 1:
+                found = _literal_sets(av[2])
+        elif op == _re_parser.BRANCH:
+            branches = [_literal_sets(b) for b in av[1]]
+            if all(branches):
+                found = frozenset().union(*branches)
+        if found:
+            candidates.append(found)
+    if run:
+        candidates.append(frozenset([run]))
+    return max(candidates, key=lambda s: min(map(len, s)), default=None)
+
+
+@functools.cache
+def required_literals(pattern: str) -> frozenset[str] | None:
+    """Strings, one of which is in the lowercased text of any match of pattern (item F17).
+
+    The regex engine scans fast only for a literal at the start of a pattern. Patterns that
+    start with an alternation or a lookahead are scanned slowly at every position, so a file
+    is first tested for these strings with `in`. Only a necessary condition: None if unknown.
+    """
+    try:
+        return _literal_sets(_re_parser.parse(pattern))
+    except Exception:
+        return None
+
+
+def may_match(pattern: str, lines: list[str]) -> bool:
+    """False only if no line of the file can match pattern, case-insensitively."""
+    literals = required_literals(pattern)
+    low = joined_lower(lines)
+    if literals is None or low is None:
+        return True
+    return any(lit in low for lit in literals)
+
+
 def best_cite(files: list[tuple[str, list[str]]], patterns: list[str], hit) -> str | None:
     """The best line where hit(compiled pattern, line) is true.
 
@@ -451,11 +515,13 @@ def best_cite(files: list[tuple[str, list[str]]], patterns: list[str], hit) -> s
     for p in patterns:
         pre = prefilter_pattern(p)
         fast = None if has_upper_literal(pre) else re.compile(pre, re.M)
-        regs.append((re.compile(p, re.I), re.compile(pre, re.I | re.M), fast))
+        regs.append((p, re.compile(p, re.I), re.compile(pre, re.I | re.M), fast))
     fallback = None
     for name, lines in sorted(files, key=lambda f: file_rank(f[0])):
         text, low = joined(lines), joined_lower(lines)
-        for cre, whole, fast in regs:
+        for p, cre, whole, fast in regs:
+            if not may_match(p, lines):
+                continue
             if not (fast.search(low) if fast and low is not None else whole.search(text)):
                 continue
             for i, line in enumerate(lines, start=1):
@@ -671,7 +737,7 @@ SECRET_WORD_RE = re.compile(SECRET_WORDS, re.I)
 
 def secret_hit(files: list[tuple[str, list[str]]]) -> str | None:
     for name, lines in files:
-        if not SECRET_WORD_RE.search(joined(lines)):
+        if not may_match(SECRET_WORDS, lines) or not SECRET_WORD_RE.search(joined(lines)):
             continue
         env_file = is_env_file(name)
         for i, line in enumerate(lines, start=1):
@@ -967,7 +1033,8 @@ def node_names(files: list[tuple[str, list[str]]]) -> tuple[set[str], str | None
     for name, lines in files:
         kind = file_kind(name)
         # A file that names no node, or code with no add_node( call, has no hit (item F8).
-        if not (ADD_NODE_RE if kind == "code" else NODE_NAME_RE).search(joined(lines)):
+        node_re = ADD_NODE_RE if kind == "code" else NODE_NAME_RE
+        if not may_match(node_re.pattern, lines) or not node_re.search(joined(lines)):
             continue
         for i, line in enumerate(lines, start=1):
             if kind == "code":

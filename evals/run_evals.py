@@ -1064,6 +1064,59 @@ def large_repo_speed(tmp: Path) -> list[str]:
     return errors
 
 
+LOREM_WORDS = (
+    "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et "
+    "dolore magna aliqua enim ad minim veniam quis nostrud exercitation ullamco laboris nisi aliquip ex ea "
+    "commodo consequat duis aute irure in reprehenderit voluptate velit esse cillum fugiat nulla pariatur "
+    "excepteur sint occaecat cupidatat non proident sunt culpa qui officia deserunt mollit anim id est laborum"
+).split()
+
+
+def lorem_repo(tmp: Path) -> None:
+    """3,000 files of 200 lines of lorem ipsum, with a few evidence lines deep inside (item F17)."""
+    files = {".gitignore": ".env\n", "CLAUDE.md": "Run pytest before you finish.\n"}
+    for i in range(LARGE_REPO_FILES):
+        lines = []
+        for j in range(200):
+            words = [LOREM_WORDS[(i * 7 + j * 13 + k * k * 5 + k) % len(LOREM_WORDS)] for k in range(12)]
+            lines.append(" ".join(words).capitalize() + ".")
+        if i == 1234:
+            lines[149] = "Each job runs in its own worktree."
+            lines[119] = "If a check fails twice in a row, the job stops."
+            lines[179] = "If review fails, the route goes back along the edge to fix."
+        suffix = ".md" if i % 3 else ".txt"
+        files[f"docs{i % 30}/part{i % 7}/page{i}{suffix}"] = "\n".join(lines) + "\n"
+    build(tmp, files)
+
+
+def lorem_repo_speed(tmp: Path) -> list[str]:
+    """3,000 files of 200 lines of lorem ipsum score in under 10 s, with the same output (item F17).
+    F8's timing case uses short, repetitive lines; lorem ipsum is denser text."""
+    lorem_repo(tmp)
+    start = time.monotonic()
+    data = score(tmp)
+    elapsed = time.monotonic() - start
+    errors = []
+    if elapsed >= LARGE_REPO_SECONDS:
+        errors.append(f"took {elapsed:.1f} s on {data['files_scanned']} files, want under {LARGE_REPO_SECONDS:.0f} s")
+    if data["files_scanned"] != LARGE_REPO_FILES + 2:
+        errors.append(f"files_scanned {data['files_scanned']}, want {LARGE_REPO_FILES + 2}")
+    deep = "docs4/part2/page1234.md"
+    want = {
+        "instruction file": "CLAUDE.md:1", "verify command": "CLAUDE.md:1", "secret ignore": ".gitignore:1",
+        "no inline secrets": f"scanned:{LARGE_REPO_FILES + 2}", "work isolation": f"{deep}:150",
+        "attempt cap": None, "evidence verify": None, "fail closed": None, "claim": None,
+        "repeated error exit": f"{deep}:120", "isolated workspace": f"{deep}:150",
+        "conditional edges": f"{deep}:180",
+    }
+    checks = {c["name"]: c for layer in ("harness", "loop", "graph") for c in data[layer]["checks"]}
+    for name, check in checks.items():
+        got = check["citation"] if check["ok"] else None
+        if got != want.get(name):
+            errors.append(f"{name}: citation {got!r}, want {want.get(name)!r}")
+    return errors
+
+
 def prefilter_keeps_case_and_unicode(tmp: Path) -> list[str]:
     """Guard for item F8's whole-file prefilter: an uppercase keyword in ASCII text, and one in
     a file with non-ASCII text, are still cited at their own line."""
@@ -1125,6 +1178,7 @@ SPECIAL = [
     ("3,000 files score in under 10 s", large_repo_speed),
     ("prefilter keeps uppercase and non-ASCII matches", prefilter_keeps_case_and_unicode),
     ("a Dutch-keyed secret is cited without its value", dutch_secret_cites_line_only),
+    ("3,000 files of lorem ipsum score in under 10 s", lorem_repo_speed),
 ]
 
 
