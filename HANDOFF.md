@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 245 cases in total (one skips in a plain venv; the lab's `make test` gives 244/244 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 249 cases in total (one skips in a plain venv; the lab's `make test` gives 248/248 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 245 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 249 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 245/245
+python3 evals/run_evals.py                       # expect 249/249
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -90,6 +90,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F9 | "Claim" as a verb about a statement no longer passes the claim check: `claim`/`claimed` directly followed by a subject pronoun (they, he, she, we, I, you), optionally after "that", or by "to be"/"to have" does not count ("Nobody can claim they created it first."). "Claim a job", "claim it" and "claimed by one worker" still count. By the pattern (no eval case), "claims"/"claiming" never matched the claim check, and "claim that X" with a noun subject ("claim that the cache is fresh") still passes. Two new cases (the fixture from the item, and the guard "Each job is claimed by one worker."; the guard passed before the fix): 228 cases; the lab's `make test` gives 227/227 (1 skipped). |
 | F10 | "In progress" in plain prose no longer passes the claim check: it counts only as a quoted value (`"in progress"`, `'in progress'`, `` `in progress` ``) or on a line that also says status, state, mark(s/ed), set(s), move(s/d) or flag(s/ged) ("Photos of the build in progress." no longer counts). Claim, lock file and already taken are unchanged. Three new cases (the fixture from the item, and two guards that passed before the fix: `"status": "in progress"` in `jobs.json`, and "A worker marks the job in progress before it starts."): 240 cases; the lab's `make test` gives 239/239 (1 skipped). |
 | F11 | `status ==` passes the conditional edges check only when the value is not a number: `status ==` followed by a digit is an HTTP or exit-code check (`if resp.status == 200:`, `assert status == 401`), not a route. "If status == failed, go back to fix." still counts. A number directly before "edge(s)" is a count and never counts, even next to a condition word ("Rebuilt: 290 nodes, 294 edges when the hook fired."). Five new cases (the three fixtures from the item, and two guards: "If status == failed, the edge goes back to fix." and the same line without the word edge still pass; both guards passed before the fix): 242 cases; the lab's `make test` gives 241/241 (1 skipped). |
+| F12 | "Join" as becoming a member no longer passes the join check: `join` directly after "why" ("Why join when there's no content?", "why join?") or directly before "us"/"our" ("Join our mailing list") does not count. "Wait for", "partial diff", a join node and "both reviews … to join" still count. By the pattern (no eval case), other membership phrasings ("join the community") still pass. Four new cases (the fixture from the item, a quoted "why join?", "Join our mailing list for updates.", and the guard "The merge step waits for both reviews to join.", which passed before the fix): 244 cases; the lab's `make test` gives 243/243 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -186,7 +187,7 @@ Found in the field check after F2 conditional edges: "conditional edges" passes 
 - Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
 - Also seen in the field check of this PR on two more repos: a count of graph edges next to a condition word still passes ("`Rebuilt: 290 nodes, 294 edges` … when the hook fired"). And `assert status == 401` inside a code block in a plan doc passes through the `status ==` pattern. Fixtures: a README line "Rebuilt: 290 nodes, 294 edges when the hook fired." and a fenced block in a `.md` with `assert status == 401`. Expected: conditional edges fails for both. A number directly before "edges" never counts.
 
-### F12. "join" as becoming a member
+### F12. "join" as becoming a member: done (see section 4)
 Found in the field check after F2 join: two repos still pass "join" on prose like "why join when there's no content?" and "a great answer to \"why join?\"". F2 join excluded method calls (`names.join(`, `os.path.join(`), not the bare verb.
 - Fixture: `README.md` "Why join when there's no content?" Expected: join fails.
 - Guard: `README.md` "The merge step waits for both reviews to join." still passes.

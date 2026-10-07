@@ -548,6 +548,12 @@ CASES = [
      {"pass:claim": True}),
     ("f10 ok: job marked in progress", {"README.md": "A worker marks the job in progress before it starts.\n"},
      {"pass:claim": True}),
+    # "Join" as becoming a member is not a graph join (item F12).
+    ("f12: why join is membership", {"README.md": "Why join when there's no content?\n"}, {"fail:join": True}),
+    ("f12: quoted why join is membership", {"README.md": 'The FAQ answers "why join?"\n'}, {"fail:join": True}),
+    ("f12: join our list is membership", {"README.md": "Join our mailing list for updates.\n"}, {"fail:join": True}),
+    # Guard: branches that join still count.
+    ("f12 ok: reviews join", {"README.md": "The merge step waits for both reviews to join.\n"}, {"pass:join": True}),
 ]
 
 
