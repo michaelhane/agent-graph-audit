@@ -221,6 +221,11 @@ Found in the field check after F11: "conditional edges" passes on `print('=== Re
 - Fixture: `README.md` with a code block holding `print('=== Review Status ===')`. Expected: conditional edges fails.
 - Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
 
+### F19. "join the club" as membership
+Found in the field check after F12: a concept doc still passes "join" on "- Pay a membership fee to join the club". F12 caught "why join?" but not "join" with a group as its object.
+- Fixture: `README.md` "Pay a membership fee to join the club." Expected: join fails. Also "Join our community."
+- Guard: `README.md` "The merge step waits for both reviews to join." still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
