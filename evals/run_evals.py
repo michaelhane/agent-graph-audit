@@ -744,6 +744,30 @@ def best_line_cited(tmp: Path) -> list[str]:
     return errors
 
 
+def data_json_ranks_below_docs(tmp: Path) -> list[str]:
+    """Only known config files rank as config. Other .json is data and ranks below docs, and a
+    permission entry in .claude/settings*.json is cited only when nothing better matches (item F3b)."""
+    local_settings = '{"permissions": {"allow": [\n  "Bash(git worktree list)"\n]}}\n'
+    cases = [
+        ("claim", {"backup/data.json": '{"note": "claim"}\n', "README.md": "Each job is claimed by one worker.\n"},
+         "README.md:1"),
+        ("work isolation", {".claude/settings.local.json": local_settings,
+                            "README.md": "Each job runs in its own worktree.\n"},
+         "README.md:1"),
+        # Guards: a known config file still ranks above docs, and data still counts when nothing else matches.
+        ("claim", {"package.json": '{"description": "claim a job"}\n', "README.md": "Each job is claimed by one worker.\n"},
+         "package.json:1"),
+        ("claim", {"backup/data.json": '{"note": "claim"}\n'}, "backup/data.json:1"),
+        ("work isolation", {".claude/settings.local.json": local_settings}, ".claude/settings.local.json:2"),
+    ]
+    errors = []
+    for n, (check, files, want) in enumerate(cases):
+        got = citation_of(tmp / f"c{n}", files, check)
+        if got != want:
+            errors.append(f"{check} (case {n}): citation {got!r}, want {want!r}")
+    return errors
+
+
 def windows_stdout_utf8(tmp: Path) -> list[str]:
     """The markdown report is UTF-8 even when stdout defaults to cp1252, as on Windows (item F7)."""
     build(tmp, {"CLAUDE.md": "Be careful.\n"})
@@ -786,6 +810,7 @@ SPECIAL = [
     ("gitignored .claude/settings.json is read and cited", ignored_claude_settings),
     ("the best matching line is cited", best_line_cited),
     ("report is UTF-8 on a cp1252 stdout", windows_stdout_utf8),
+    ("data .json ranks below docs", data_json_ranks_below_docs),
 ]
 
 

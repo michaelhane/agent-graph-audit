@@ -318,20 +318,38 @@ INSTRUCTION_NAMES = {"AGENTS.md", "CLAUDE.md"}
 MAKE_TARGET_RE = re.compile(r"^[^\s#=:][^=:]*::?(?!=)")
 
 
+CONFIG_NAMES = {"Makefile", "package.json"}
+# Claude settings and hook configs are the only other .json that ranks as config.
+CONFIG_JSON_RE = re.compile(r"(?:.*/)?(?:\.claude/settings(?:\.local)?|hooks[^/]*)\.json")
+# A tool-rule entry in a permission list: "Bash(git worktree list)",
+PERMISSION_ENTRY_RE = re.compile(r'^\s*"\w+\(.*\)"\s*,?\s*$')
+
+
 def file_rank(name: str) -> int:
-    """Which file to cite first when several match: state, config, instruction files, docs, code."""
+    """Which file to cite first when several match: state, config, instruction files, docs, code, data.
+
+    Only known config files rank as config. Any other .json is data (a backup, a stored
+    snippet) and ranks last, though it still counts when nothing else matches.
+    """
     path = Path(name)
     if path.name in STATE_NAMES:
         return 0
+    if path.name in CONFIG_NAMES or CONFIG_JSON_RE.fullmatch(name):
+        return 1
     if path.name in INSTRUCTION_NAMES:
         return 2
+    if path.suffix.lower() == ".json":
+        return 5
     return {"config": 1, "doc": 3, "code": 4}[file_kind(name)]
 
 
 def weak_line(name: str, line: str) -> bool:
-    """A comment, an ignore-file line or a make target: cited only when no better line matches."""
+    """A comment, an ignore-file line, a make target or a permission entry: cited only when
+    no better line matches. A permission entry allows a command; it does not state a rule."""
     path = Path(name)
     if path.name == ".gitignore":
+        return True
+    if path.suffix.lower() == ".json" and PERMISSION_ENTRY_RE.match(line):
         return True
     stripped = line.lstrip()
     if file_kind(name) == "doc":
@@ -623,7 +641,7 @@ def loop_checks(files: list[tuple[str, list[str]]]) -> dict:
     command = cite_any(verify_files(files), [VERIFY_CMD_RE.pattern])
     closed = cite_any(prose, [FAIL_CLOSED_RE.pattern])
     repeated = cite_any(prose, [r"same error", r"same failure", r"\btwice\b", r"\bstuck\b"])
-    claim = cite_affirmed(prose, [r"(?<!any )\bclaim\b", r"in progress", r"lock file", r"already taken"])
+    claim = cite_affirmed(prose, [r"(?<!any )\bclaim(?:ed)?\b",r"in progress", r"lock file", r"already taken"])
     attempt_cap = cite_affirmed(files, [ATTEMPT_RE.pattern])
     workspace = cite_affirmed(files, [r"worktree", r"per job"], shared_words=True)
     checks = [
