@@ -280,6 +280,11 @@ Found with a synthetic probe during the F25 field check, not in a field repo: "W
 - Fixture: `README.md` "When the review fails, the graph routes back to fix." Expected: conditional edges passes.
 - Guard: `README.md` "Traffic routes through the CDN when the origin fails." still fails (no step or node).
 
+### F28. Budget: "times out after N minutes" (false fail)
+Found with a synthetic probe during the F26 field check, not in a field repo: "Each agent run times out after 10 minutes." fails "budget" on main and after F26. It states a time budget for an agent run, but the check knows `timeout` (one word) and "budget", not the verb "times out".
+- Fixture: `README.md` "Each agent run times out after 10 minutes." Expected: budget passes.
+- Guard: `README.md` "Screenshots sometimes time out." still fails.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
