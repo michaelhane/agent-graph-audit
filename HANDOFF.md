@@ -234,6 +234,11 @@ Found in the field check after F13: "budget" passes on `resp = urllib.request.ur
 - Fixture: `README.md` with a code block holding `resp = urllib.request.urlopen(req, timeout=10)`. Expected: budget fails.
 - Guard: `loop.py` with `AGENT_TIMEOUT = 600` and a workflow with `timeout-minutes: 30` still pass.
 
+### F21. Attempt cap: UI code outside the known folders, and non-agent retry caps
+Found in the field check after F15: F15 skips UI code by folder name (`site/`, `web/`, …), so the same shrink-to-fit loop under `src/js/compositor-renderer.js` still passes "attempt cap". Next in line is `MAX_ATTEMPTS = 50` capping retries in an image generator script, also not a cap on an agent's fix attempts.
+- Fixture: `src/js/render.js` with `while (tooTall() && attempts < 12) { attempts++; }`. Expected: attempt cap fails. Also `scripts/generate.py` with `MAX_ATTEMPTS = 50` and `while made < n and attempts < MAX_ATTEMPTS:` and no job, fix or agent on those lines.
+- Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
