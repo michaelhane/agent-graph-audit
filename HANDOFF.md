@@ -274,6 +274,11 @@ Found in the field check after F23: with the browser timeout gone, "budget" pass
 - Fixture: `README.md` with a code block holding `subprocess.run([sys.executable, 'deploy.py'],` / `    capture_output=True, text=True, timeout=60)`. Expected: budget fails.
 - Guard: `loop.py` with `AGENT_TIMEOUT = 600`, and a workflow with `timeout-minutes: 30`, still pass.
 
+### F27. Conditional edges: routing prose without the word edge (false fail)
+Found with a synthetic probe during the F25 field check, not in a field repo: "When the review fails, the graph routes back to fix." fails "conditional edges" on main and after F25. It describes a conditional route between two steps, but the check wants the word edge (or `status ==`) on the line. A real setup that says it this way scores 0 for a rule it has.
+- Fixture: `README.md` "When the review fails, the graph routes back to fix." Expected: conditional edges passes.
+- Guard: `README.md` "Traffic routes through the CDN when the origin fails." still fails (no step or node).
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
