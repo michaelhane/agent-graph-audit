@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 284 cases in total (one skips in a plain venv; the lab's `make test` gives 283/283 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 286 cases in total (one skips in a plain venv; the lab's `make test` gives 285/285 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 284 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 286 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 284/284
+python3 evals/run_evals.py                       # expect 286/286
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -102,6 +102,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F21 | A cap in code counts for the attempt cap check only in a file with agent context: `agent(s)`, `job(s)`, `fix`/`fixes`/`fixed`/`fixing`, `worker(s)` or `escalate`/`escalation` as a word in the file (an `_` or non-letter around it is fine, so `escalate(job)` and `run_fix(` count), or one of those or `loop(s)` in its path (`loop.py`). A shrink-to-fit loop under `src/js/` and `MAX_ATTEMPTS = 50` in an image generator script no longer count. Docs and config are unchanged, and F15's UI-folder rule stays. This narrows decision 4 for this check: `MAX_PIPE_ATTEMPTS = 20` in code counts only next to such a word. By the pattern (no eval case), camelCase (`runJob`) is not a word match. Four new cases (the two fixtures from the item, and two guards that passed before the fix: `MAX_ATTEMPTS = 3` with `escalate(job)` in `loop.py`, and `MAX_RETRIES = 3` in `src/runner.py` that runs `run_fix(job, …)`): 274 cases; the lab's `make test` gives 273/273 (1 skipped). |
 | F22 | A status filter in a view table no longer passes the conditional edges check: a `status ==` comparison counts only with a branch or route word on the same line (if, elif, when, unless, else, otherwise, then, case, route, go back/to, goto, edge), an arrow (`->`, `=>`, `→`) or a ternary `? `. So `` | Inbox | `status == "none"` | `` fails, while "If status == failed, the edge goes back to fix." and `elif status == 'failed':` still pass. Three new cases (the fixture from the item, the item's guard, and an `elif` router in a README code block; both guards passed before the fix): 275 cases; the lab's `make test` gives 274/274 (1 skipped). |
 | F23 | A timeout on one browser step no longer passes the budget check: `timeout` does not count on a line with a navigation or wait on a page or frame (`page.goto(`, `page.waitForSelector(`, `page.wait_for_selector(`, any `page.`/`frame.` + `waitFor…`/`wait_for…`). The `page`/`frame` receiver is required, so `await asyncio.wait_for(run_agent(job), timeout=600)` still counts (decision 4). By the pattern (no eval case), a browser call on another receiver (`tab.goto(`, `locator.waitFor(`) still passes, and clicks, fills and `set_default_timeout` are not excluded. Five new cases (the two fixtures from the item, a Python `page.wait_for_selector` variant, and two guards that passed before the fix: `AGENT_TIMEOUT = 600` and `await asyncio.wait_for(run_agent(job), timeout=600)` in `loop.py`); the three browser cases failed before the fix: 281 cases; the lab's `make test` gives 280/280 (1 skipped). |
+| F24 | The agent word for the attempt cap check (F21) has to be near the cap in code: within 5 lines of the cap line, not anywhere in the file. Lines further from every agent word are blanked before the cap search, so citations keep their line numbers. A path with an agent word or `loop(s)` (`loop.py`) still counts for the whole file, and docs and config are unchanged. "Fixed layout at the top." in a docstring 30 lines above `MAX_ATTEMPTS = 50` no longer counts. Two new cases (the fixture from the item, and the item's guard `MAX_ATTEMPTS = 3` with `escalate(job)` in `loop.py`, which passed before the fix; the F21 `run_fix(job, …)` guard, two lines below its cap, still passes): 281 cases; the lab's `make test` gives 280/280 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -257,7 +258,7 @@ Found in the field check after F20: "budget" passes on `await page.goto('{url}',
 - Fixture: `README.md` with a code block holding `await page.goto(url, { timeout: 15000 });`. Expected: budget fails. Also `await page.waitForSelector('#x', { timeout: 5000 });`.
 - Guard: `loop.py` with `AGENT_TIMEOUT = 600` still passes.
 
-### F24. Attempt cap: the agent-word test is file-wide
+### F24. Attempt cap: the agent-word test is file-wide: done (see section 4)
 Found in the field check after F21: an image generator script still passes "attempt cap" on `MAX_ATTEMPTS = 50`, because the agent-word test looks at the whole file and its docstring says "Zone approach: fixed hierarchy at top" ("fixed" as in not variable). The word has to be near the cap, not anywhere in the file.
 - Fixture: `scripts/generate.py` with a docstring "Fixed layout at the top." and, 30 lines later, `MAX_ATTEMPTS = 50` and `while made < n and attempts < MAX_ATTEMPTS:`. Expected: attempt cap fails.
 - Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.

@@ -125,15 +125,30 @@ def ui_code(name: str) -> bool:
 
 
 # Code counts for the attempt cap only with agent context (item F21): a word for a job, fix,
-# agent, worker or escalation in the file, or one of those or "loop" in its path. A cap in a
+# agent, worker or escalation near the cap (item F24), or one of those or "loop" in its path. A cap in a
 # layout loop or an image generator script bounds something else.
 AGENT_WORDS = r"agents?|jobs?|fix(?:es|ed|ing)?|workers?|escalat(?:e|es|ed|ing|ion)"
 AGENT_TEXT_RE = re.compile(rf"(?<![a-z])(?:{AGENT_WORDS})(?![a-z])", re.I)
 AGENT_PATH_RE = re.compile(rf"(?<![a-z])(?:{AGENT_WORDS}|loops?)(?![a-z])", re.I)
 
 
-def agent_code(name: str, lines: list[str]) -> bool:
-    return AGENT_PATH_RE.search(name) is not None or AGENT_TEXT_RE.search(joined(lines)) is not None
+# The agent word has to be near the cap (item F24): "Fixed layout" in a docstring 30 lines
+# above a retry cap in an image generator script is not agent context.
+AGENT_NEAR = 5
+
+
+def agent_lines(name: str, lines: list[str]) -> list[str] | None:
+    """The file's lines near an agent word, the others blanked so citations keep their line
+    numbers. All lines in an agent path; None if the file has no agent word."""
+    if AGENT_PATH_RE.search(name):
+        return lines
+    if not AGENT_TEXT_RE.search(joined(lines)):
+        return None
+    keep = set()
+    for i, line in enumerate(lines):
+        if AGENT_TEXT_RE.search(line):
+            keep.update(range(i - AGENT_NEAR, i + AGENT_NEAR + 1))
+    return [line if i in keep else "" for i, line in enumerate(lines)]
 
 # Negation. A match is negated when one of the 4 words before it, in the same
 # clause, is a negator: "we do not use a worktree", "there is no allowlist".
@@ -905,10 +920,12 @@ def loop_checks(files: list[tuple[str, list[str]]]) -> dict:
     closed = cite_any(prose, [FAIL_CLOSED_RE.pattern])
     repeated = cite_any(prose, [r"same error", r"same failure", TWICE_EXIT_RE, STUCK_EXIT_RE])
     claim = cite_claim(prose)
-    capped = [
-        f for f in files
-        if file_kind(f[0]) != "code" or not may_match(ATTEMPT_RE.pattern, f[1]) or agent_code(*f)
-    ]
+    capped = []
+    for f in files:
+        if file_kind(f[0]) != "code" or not may_match(ATTEMPT_RE.pattern, f[1]):
+            capped.append(f)
+        elif (near := agent_lines(*f)) is not None:
+            capped.append((f[0], near))
     attempt_cap = cite_affirmed([f for f in capped if not ui_code(f[0])], [ATTEMPT_RE.pattern]) or cite_affirmed(
         [f for f in capped if ui_code(f[0])], [ATTEMPT_NAMED_RE.pattern]
     )

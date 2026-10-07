@@ -661,6 +661,17 @@ CASES = [
     ("f23 ok: asyncio.wait_for on the agent run in loop.py",
      {"loop.py": "await asyncio.wait_for(run_agent(job), timeout=600)\n"},
      {"pass:budget": True}),
+    # An agent word far from the cap is not agent context (item F24): "Fixed" in a docstring
+    # 30 lines above a retry cap in an image generator script.
+    ("f24: Fixed in a docstring far from the cap is not agent context",
+     {"scripts/generate.py": '"""Fixed layout at the top."""\n' + "pass\n" * 29
+                             + "MAX_ATTEMPTS = 50\nwhile made < n and attempts < MAX_ATTEMPTS:\n"
+                             + "    attempts += 1\n"},
+     {"fail:attempt cap": True}),
+    # Guard: an agent word next to the cap still counts (also the f21 ok cases).
+    ("f24 ok: MAX_ATTEMPTS in loop.py with escalate(job)",
+     {"loop.py": "MAX_ATTEMPTS = 3\nif attempts >= MAX_ATTEMPTS: escalate(job)\n"},
+     {"pass:attempt cap": True}),
 ]
 
 
