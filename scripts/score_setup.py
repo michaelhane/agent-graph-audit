@@ -123,6 +123,18 @@ UI_DIRS = {"site", "web", "www", "public", "static", "frontend", "ui", "componen
 def ui_code(name: str) -> bool:
     return any(part.lower() in UI_DIRS for part in Path(name).parts[:-1])
 
+
+# Code counts for the attempt cap only with agent context (item F21): a word for a job, fix,
+# agent, worker or escalation in the file, or one of those or "loop" in its path. A cap in a
+# layout loop or an image generator script bounds something else.
+AGENT_WORDS = r"agents?|jobs?|fix(?:es|ed|ing)?|workers?|escalat(?:e|es|ed|ing|ion)"
+AGENT_TEXT_RE = re.compile(rf"(?<![a-z])(?:{AGENT_WORDS})(?![a-z])", re.I)
+AGENT_PATH_RE = re.compile(rf"(?<![a-z])(?:{AGENT_WORDS}|loops?)(?![a-z])", re.I)
+
+
+def agent_code(name: str, lines: list[str]) -> bool:
+    return AGENT_PATH_RE.search(name) is not None or AGENT_TEXT_RE.search(joined(lines)) is not None
+
 # Negation. A match is negated when one of the 4 words before it, in the same
 # clause, is a negator: "we do not use a worktree", "there is no allowlist".
 # Dutch counts the same (decision 8): "we gebruiken geen worktree".
@@ -887,8 +899,12 @@ def loop_checks(files: list[tuple[str, list[str]]]) -> dict:
     closed = cite_any(prose, [FAIL_CLOSED_RE.pattern])
     repeated = cite_any(prose, [r"same error", r"same failure", TWICE_EXIT_RE, STUCK_EXIT_RE])
     claim = cite_claim(prose)
-    attempt_cap = cite_affirmed([f for f in files if not ui_code(f[0])], [ATTEMPT_RE.pattern]) or cite_affirmed(
-        [f for f in files if ui_code(f[0])], [ATTEMPT_NAMED_RE.pattern]
+    capped = [
+        f for f in files
+        if file_kind(f[0]) != "code" or not may_match(ATTEMPT_RE.pattern, f[1]) or agent_code(*f)
+    ]
+    attempt_cap = cite_affirmed([f for f in capped if not ui_code(f[0])], [ATTEMPT_RE.pattern]) or cite_affirmed(
+        [f for f in capped if ui_code(f[0])], [ATTEMPT_NAMED_RE.pattern]
     )
     workspace = cite_affirmed(files, [r"worktree", r"per job"], shared_words=True)
     checks = [

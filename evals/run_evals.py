@@ -617,6 +617,21 @@ CASES = [
     ("f20 ok: subprocess timeout in loop.py",
      {"loop.py": "subprocess.run(agent_cmd, timeout=600)\n"},
      {"pass:budget": True}),
+    # A cap in code with no agent context is not an agent's attempt cap (item F21): a layout
+    # loop outside the known UI folders, and a retry cap in an image generator script.
+    ("f21: shrink-to-fit loop in src/js is not a cap",
+     {"src/js/render.js": "var attempts = 0;\nwhile (tooTall() && attempts < 12) { attempts++; }\n"},
+     {"fail:attempt cap": True}),
+    ("f21: MAX_ATTEMPTS in a generator script is not a cap",
+     {"scripts/generate.py": "MAX_ATTEMPTS = 50\nwhile made < n and attempts < MAX_ATTEMPTS:\n    attempts += 1\n"},
+     {"fail:attempt cap": True}),
+    # Guards: a cap in loop code, or in code that runs fix jobs, still counts.
+    ("f21 ok: MAX_ATTEMPTS in loop.py",
+     {"loop.py": "MAX_ATTEMPTS = 3\nif attempts >= MAX_ATTEMPTS: escalate(job)\n"},
+     {"pass:attempt cap": True}),
+    ("f21 ok: MAX_RETRIES in code that runs fix jobs",
+     {"src/runner.py": "MAX_RETRIES = 3\nfor job in queue:\n    run_fix(job, MAX_RETRIES)\n"},
+     {"pass:attempt cap": True}),
 ]
 
 
