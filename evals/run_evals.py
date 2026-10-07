@@ -426,6 +426,16 @@ CASES = [
     ("f2 ok: timeout-minutes in a workflow", {".github/workflows/ci.yml": "    timeout-minutes: 30\n"},
      {"pass:budget": True}),
     ("f2 ok: AGENT_TIMEOUT in code", {"loop.py": "AGENT_TIMEOUT = 600\n"}, {"pass:budget": True}),
+    # "Twice" with no exit on the line is a count, not a repeated-error exit (F2 repeated error exit).
+    ("f2: crashed twice is not an error exit", {"README.md": "It crashed twice last week.\n"},
+     {"fail:repeated error exit": True}),
+    # Guards: twice with a stop or escalation on the line, and "same error", still count.
+    ("f2 ok: fails twice then stops", {"README.md": "If a check fails twice in a row, the job stops.\n"},
+     {"pass:repeated error exit": True}),
+    ("f2 ok: escalate on second failure", {"README.md": "Escalate to a human when a fix fails twice.\n"},
+     {"pass:repeated error exit": True}),
+    ("f2 ok: same error ends the job", {"README.md": "The same error on two attempts ends the job.\n"},
+     {"pass:repeated error exit": True}),
 ]
 
 
