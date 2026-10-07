@@ -839,7 +839,8 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
     )
     bounded = cite_affirmed(prose, [r"\bbounded\b", r"retry edge", r"max attempts"]) or cite(code, BOUND_CODE_RE)
     join = (
-        cite_affirmed(prose, [r"\bjoin\b(?!\.\w)", r"wait for", r"partial diff"])
+        # A method call such as names.join(', ') in a doc snippet is not a join.
+        cite_affirmed(prose, [r"(?<!\.)\bjoin\b(?!\.\w|\()", r"wait for", r"partial diff"])
         or cite(config, JOIN_CONFIG_RE)
         or cite(code, JOIN_CODE_RE)
     )
