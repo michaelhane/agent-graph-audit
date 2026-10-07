@@ -153,6 +153,16 @@ Measure again after F1. Target: under 10 s on 3,000 tracked files.
 ### F6. Secret check: Dutch key names
 `wachtwoord: <literal>` in Markdown is not flagged today. Give the citation only, never the value.
 
+### F9. "claim" as a verb about a statement
+Found in the field check after F2 claim: a design doc passes "claim" with "nobody can retroactively claim they created something first". The F2 rule only excludes the noun ("a/the … claim").
+- Fixture: `README.md` "Nobody can claim they created it first." Expected: claim fails.
+- Guard: `README.md` "Each job is claimed by one worker." still passes.
+
+### F10. "in progress" in plain prose
+Found in the same field check: "claim" passes on a blog post's "photos of the tower build in progress", through the `in progress` pattern.
+- Fixture: `README.md` "Photos of the build in progress." Expected: claim fails.
+- Guard: a state file `jobs.json` with `"status": "in progress"` still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
