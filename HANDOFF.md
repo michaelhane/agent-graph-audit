@@ -249,6 +249,11 @@ Found in the field check after F18: "conditional edges" passes on a design-doc t
 - Fixture: `README.md` with the table `| View | Filter |` / `| Inbox | \`status == "none"\` |`. Expected: conditional edges fails.
 - Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
 
+### F23. A browser navigation timeout counts as a run budget
+Found in the field check after F20: "budget" passes on `await page.goto('{url}', { waitUntil: 'domcontentloaded', timeout: 15000 });` in a plan's code snippet, through `(?<![a-z])timeout`. F20 covers HTTP calls, not Playwright/Puppeteer navigation or waits.
+- Fixture: `README.md` with a code block holding `await page.goto(url, { timeout: 15000 });`. Expected: budget fails. Also `await page.waitForSelector('#x', { timeout: 5000 });`.
+- Guard: `loop.py` with `AGENT_TIMEOUT = 600` still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
