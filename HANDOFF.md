@@ -207,6 +207,10 @@ Found in the field check after F4: a `CLAUDE.md` now passes "fail closed" on the
 - Fixture: `CLAUDE.md` "Stop at the first error." Expected: fail closed passes, like the Dutch line.
 - Guard: `README.md` "The first error was a typo." still fails.
 
+### F17. Speed target on denser filler
+Found in the field check after F8: on a synthetic repo of 3,000 committed files of 200 lines of lorem ipsum, the scorer took 95.8 s before F8 and 17.7 s after it (same output) on the lab host. That is the same 5x gain F8 reports, but above the 10 s target. F8's 6 s was measured on its own fixture.
+- Fixture: a timing script that builds that repo and runs the scorer once. Expected: under 10 s on the lab host, output unchanged.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
