@@ -554,6 +554,17 @@ CASES = [
     ("f12: join our list is membership", {"README.md": "Join our mailing list for updates.\n"}, {"fail:join": True}),
     # Guard: branches that join still count.
     ("f12 ok: reviews join", {"README.md": "The merge step waits for both reviews to join.\n"}, {"pass:join": True}),
+    # "Budget" with no amount or run scope is not a run budget (item F13).
+    ("f13: cognitive budget is not a run budget", {"README.md": "The user's cognitive budget is finite.\n"},
+     {"fail:budget": True}),
+    ("f13: budget form field is not a run budget",
+     {"README.md": "Honeypot fields (`phone_number`, `budget`) are rejected.\n"},
+     {"fail:budget": True}),
+    # Guards: a budget with an amount, or a budget per run, still counts.
+    ("f13 ok: budget of 30 turns", {"README.md": "Each run has a budget of 30 turns.\n"}, {"pass:budget": True}),
+    ("f13 ok: a $5 budget", {"README.md": "Each run has a $5 budget.\n"}, {"pass:budget": True}),
+    ("f13 ok: budget per run", {"README.md": "The agent stops when its budget per run is spent.\n"},
+     {"pass:budget": True}),
 ]
 
 

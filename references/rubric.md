@@ -41,7 +41,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 | Work isolation | 10 | Worktree, branch per, or isolated branch. "one branch" does not pass. *neg*, and "share a single worktree" does not pass |
 | Tool boundary | 15 | Allowlist, protected path, cannot merge/push, or a non-empty `allow`/`deny` list in `.claude/settings.json` or `.claude/settings.local.json`. *neg* |
 | Trace | 15 | Trace, audit log, tool call, or run log. *neg* |
-| Budget | 10 | Timeout, token budget, max minutes, spend cap, or budget. *neg* |
+| Budget | 10 | Timeout, token budget, max minutes, spend cap, or a budget with an amount or a run scope ("budget of 30 turns", "$5 budget", "budget per run", "run budget"). *neg* |
 
 ## Loop (100)
 
