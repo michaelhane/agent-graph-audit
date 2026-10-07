@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 208 cases in total (208/208 with the system Python; one skips in a plain venv).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 218 cases in total (218/218 with the system Python; one skips in a plain venv).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 208 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 218 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 208/208
+python3 evals/run_evals.py                       # expect 218/218
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -83,6 +83,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F2 bounded cycle | "Bounded" no longer passes the bounded cycle check when the line says something other than a cycle is bounded: in "X is/are/was/were/stays/remains [one word] bounded", X must be a loop, cycle, retry/retries, attempt, iteration, round, edge or recursion ("Cost is bounded per turn." and "Memory is strictly bounded." no longer count). A bare "bounded" with no subject, "bounded by max_attempts", "retry edge" and "max attempts" are unchanged. Four new cases (the fixture from the item, "Memory is strictly bounded.", and two guards: "The fix loop is bounded at 3 rounds." and "Retries are always bounded per job." still pass): 199 cases; the lab's `make test` gives 198/198 (1 skipped). |
 | F2 attempt cap | A counter that starts at 0 no longer passes the attempt cap check: in the `attempt(s)` followed by `:`, `=` or `<` form, the number may not be `0` ("`var attempts = 0`"). `while (attempts < 3)` and `attempts=3` as an argument still count, and so do `max_attempts`, `MAX_RETRIES = 3` and `stop_after_attempt(3)`. By the pattern (no eval case), a counter that starts at 1 (`attempts = 1`) still passes. Three new cases (the fixture from the item, and those two guards): 201 cases; the lab's `make test` gives 200/200 (1 skipped). |
 | F2 fail closed | `non-zero` passes the fail closed check only on a line that also says exit, return, status, code, fail/failure, abort or stop ("Report a non-zero count." no longer counts). "Exits non-zero", "a non-zero status stops the job", "fail closed", "exit code" and "must pass" are unchanged. Three new cases (the fixture from the item, and two guards: "The verify step exits non-zero on any failure." and "A non-zero status stops the job." still pass): 205 cases; the lab's `make test` gives 204/204 (1 skipped). |
+| F4 | Dutch evidence (decision 8). Human gate also accepts "zonder akkoord" and "wacht/wachten op akkoord"; fail closed also accepts "faalt dicht" and "stop/stopt/stoppen bij de eerste fout". The negation window also has the Dutch negators niet, geen, nooit and zonder, so "We gebruiken geen worktree." and "Agents draaien zonder timeout." no longer count. Auto-merge still fails a Dutch gate (decision 3). Only negators *before* a keyword are Dutch; the after-the-match form ("wordt niet gebruikt") is English only. Ten new cases (eight fixtures from the item, and two guards: "Elke job krijgt een eigen worktree." still passes, and "zonder akkoord" next to auto-merge still fails the gate): 218 cases; the lab's `make test` gives 217/217 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -149,7 +150,7 @@ Each line below is a README sentence that passes today and should fail.
 - attempt cap: `var attempts = 0` (no bound). Done (see section 4).
 - fail closed: "Report a non-zero count." Done (see section 4).
 
-### F4. Dutch evidence (decision 8)
+### F4. Dutch evidence (decision 8): done (see section 4)
 - human gate: "zonder akkoord", "wacht op akkoord".
 - fail closed: "faalt dicht", "stop bij de eerste fout".
 - The negation window also needs Dutch negators: niet, geen, nooit, zonder.
@@ -198,6 +199,11 @@ Found in the field check after F2 repeated error exit: a coaching doc passes "re
 Found in the field check after F2 attempt cap: a site renderer passes "attempt cap" on `while (el.scrollHeight > frameH + 2 && attempts < 12) {`, a shrink-to-fit loop, through `attempt(?:s)?\s*[:=<]\s*\d`. It bounds a layout loop, not an agent's fix attempts.
 - Fixture: `site/js/render.js` with `var attempts = 0;` and `while (tooTall() && attempts < 12) { attempts++; }`. Expected: attempt cap fails.
 - Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
+
+### F16. English parity for "stop at the first error" (decision 8)
+Found in the field check after F4: a `CLAUDE.md` now passes "fail closed" on the Dutch rule "Stop bij de eerste fout — analyseer, fix, verifieer voordat je doorgaat." The English rule "Stop at the first error." does not pass, although decision 8 says Dutch counts the same as English.
+- Fixture: `CLAUDE.md` "Stop at the first error." Expected: fail closed passes, like the Dutch line.
+- Guard: `README.md` "The first error was a typo." still fails.
 
 ### Known limits (accepted for now, documented in README)
 

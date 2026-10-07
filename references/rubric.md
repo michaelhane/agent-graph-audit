@@ -20,7 +20,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 - A prompt that says "try again" with no numeric cap.
 - Auto-merge without a preceding `no` fails the human-gate check, even if a gate phrase is also present. A pass is still not a permission check.
 - Secrets assigned as literals. That fails the inline-secret check even if everything else passes.
-- A negated mention. "We do not use a worktree", "there is no allowlist", "no max attempts", "unbounded retries" are not evidence. Checks marked *neg* below skip a match when one of the 4 words before it, in the same clause, is a negator (no, not, never, without, nor, cannot, lack, any `n't` word), or when the clause goes on to say "is not used/enabled/set" or "is disabled". For the two isolation checks, "share", "single" and "same" also negate, unless the clause says per job, each job, or its own.
+- A negated mention. "We do not use a worktree", "there is no allowlist", "no max attempts", "unbounded retries" are not evidence. Checks marked *neg* below skip a match when one of the 4 words before it, in the same clause, is a negator (no, not, never, without, nor, cannot, lack, any `n't` word, or Dutch niet, geen, nooit, zonder), or when the clause goes on to say "is not used/enabled/set" or "is disabled". For the two isolation checks, "share", "single" and "same" also negate, unless the clause says per job, each job, or its own.
 
 ## Where each check looks
 
@@ -50,7 +50,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 | Claim | 15 | 15 | Claim or claimed, in progress, lock file, or already taken, in docs or config. *neg* |
 | Attempt cap | 20 | 20 | A numeric retry or attempt cap: `max_attempts: 3`, `MAX_RETRIES = 3`, `stop_after_attempt(3)`, `max 3 attempts`, `retry 2`. A "token budget of N" is not an attempt cap. "max attempts" without a number does not pass. *neg* |
 | Evidence verify | 20 | 20 | A real test command plus a fail-closed phrase |
-| Fail closed | 15 | 15 | Fail closed, exit code, must pass, or non-zero, in docs or config |
+| Fail closed | 15 | 15 | Fail closed, exit code, must pass, or non-zero, in docs or config. Dutch: "faalt dicht", "stop bij de eerste fout" |
 | Repeated error exit | 15 | 7 | Same error, same failure, twice (on a line that also stops, exits or escalates), or stuck, in docs or config. Half until a fingerprint exists |
 | Isolated workspace | 15 | 15 | Worktree or per job. "dirty tree" does not pass. *neg*, and "share a single worktree" does not pass |
 
@@ -61,7 +61,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 | Named nodes | 20 | At least three of intake, triage, fix, review, gate, planner, executor, verifier, each on a line with an arrow (`->`, `-->`, `→`, `=>`) or the word node(s), or in backticks in a doc. Or three `add_node("…")` calls in code, any names. "Fix bugs, ask for review, pass the gate" does not pass |
 | Conditional edges | 15 | Tests passed, an edge on a line with a condition (if, when, unless, else, otherwise, condition(al), depending, based on, route(d), on failure/pass/…, `==`; not "edge cases", "cutting edge", "edge-cache"), or status ==, in docs or config. *neg*. Or `add_conditional_edges(` in code |
 | External state | 20 | `job_id`, `status` and `attempt` all found; all three lines cited |
-| Human gate | 15 | A gate phrase, and no unnegated auto-merge (any spelling or word form: automerge, auto merge, auto-merged, auto-merges, auto-merging, also inside identifiers such as allow_auto_merge or platformAutomerge), and no `merge ... --auto` on the same line, where backslash-continued lines count as one |
+| Human gate | 15 | A gate phrase (Dutch "zonder akkoord" and "wacht op akkoord" count too), and no unnegated auto-merge (any spelling or word form: automerge, auto merge, auto-merged, auto-merges, auto-merging, also inside identifiers such as allow_auto_merge or platformAutomerge), and no `merge ... --auto` on the same line, where backslash-continued lines count as one |
 | Ignore outcome | 10 | Ignore, wontfix, or not fixable in docs (*neg*). In config or code only an outcome value counts: `"ignored"`, `wontfix`, `not_fixable`. `# type: ignore` and a dependabot `ignore:` key do not pass, nor does a command or flag in docs (`git check-ignore`, `--ignore=tests/slow`) |
 | Bounded cycle | 10 | Bounded (not "unbounded"), retry edge, or max attempts, in docs or config (*neg*). Or `recursion_limit` / `max_attempts = N` / `max_retries = N` in code |
 | Join | 10 | Join, wait for, or partial diff, in docs or config (*neg*). Or a workflow job with `needs: [a, b]`, or `add_edge([a, b], c)` in code. `", ".join(...)` does not pass |

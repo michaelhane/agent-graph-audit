@@ -45,7 +45,7 @@ The report gives the composite, the three layer scores, the next missing check t
 python3 evals/run_evals.py
 ```
 
-208 cases. Each one is a bypass or bug found in review, for example:
+218 cases. Each one is a bypass or bug found in review, for example:
 
 - an empty `state.json` lifting the ceiling
 - a workflow comment counted as a job
@@ -71,7 +71,7 @@ Run the tests after any change to a pattern.
 - Negations other than "no" ("never auto-merge") fail the gate, and so does a setting turned off (`allow_auto_merge: false`). This is deliberate: when unsure, it fails closed. The check's `why` field names the line it found.
 - Auto-merge in another sense also fails the gate, for example a library option named `auto_merge` or a `GetAutoMergingPreview` API. That mostly shows up in vendored code; `node_modules` and `.venv` are already skipped.
 - `merge ... --auto` is matched per command line. Lines ending in a backslash are joined first. A command split some other way (for example a YAML folded `>` block) is not joined.
-- Negation is a short window, not a parser. A negator in the 4 words before a keyword, in the same clause, cancels it ("we do not use a worktree"), and so does "is not used" or "is disabled" right after. It errs closed: "do not reuse a worktree between jobs" also reads as negated. "Worktrees are not shared" passes.
+- Negation is a short window, not a parser. A negator in the 4 words before a keyword, in the same clause, cancels it ("we do not use a worktree"), and so does "is not used" or "is disabled" right after. It errs closed: "do not reuse a worktree between jobs" also reads as negated. "Worktrees are not shared" passes. Dutch negators (niet, geen, nooit, zonder) count in the window before a keyword; a Dutch negation after it ("de worktree wordt niet gebruikt") is not recognised.
 - Graph checks, and the loop's claim, fail-closed and repeated-error checks, match words in docs and config only, not in code comments. Code counts for the graph only through graph-builder calls (`add_node`, `add_conditional_edges`, `add_edge([a, b], c)`, LangGraph style) and numeric bounds. A graph built some other way in code needs a doc or config that describes it.
 - Common words in docs can still false-positive (`trace`, `claim`, "ignore" as a verb). Node names need graph context (an arrow, the word node, or backticks), so "fix bugs, ask for review" no longer counts as three nodes.
 - The secret check is a pattern check, not a secret scanner. It flags a key name (`api_key`, `secret`, `token`, `password`) assigned a quoted literal of 12+ characters anywhere, or an unquoted value in `.env`, `.env.*`, `*.env` and `.envrc` files. It ignores placeholders (`your_…`, `…_here`, `xxxxxx`, `changeme`), file paths, environment-variable names like `OPENAI_API_KEY`, and keys that describe a secret rather than hold one (`token_type`, `secret_name`, `token_url`). Use a dedicated secret scanner if you need real assurance.
