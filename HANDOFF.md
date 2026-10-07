@@ -215,6 +215,11 @@ Found in the field check after F4: a `CLAUDE.md` now passes "fail closed" on the
 Found in the field check after F8: on a synthetic repo of 3,000 committed files of 200 lines of lorem ipsum, the scorer took 95.8 s before F8 and 17.7 s after it (same output) on the lab host. That is the same 5x gain F8 reports, but above the 10 s target. F8's 6 s was measured on its own fixture.
 - Fixture: a timing script that builds that repo and runs the scorer once. Expected: under 10 s on the lab host, output unchanged.
 
+### F18. A "=== Status ===" banner counts as a conditional edge
+Found in the field check after F11: "conditional edges" passes on `print('=== Review Status ===\n')` in a plan doc. F11's `status ==(?!\s*\d)` matches "Status ===" because the next character is `=`, not a digit.
+- Fixture: `README.md` with a code block holding `print('=== Review Status ===')`. Expected: conditional edges fails.
+- Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
