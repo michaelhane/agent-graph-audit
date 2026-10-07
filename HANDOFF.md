@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; after F3 and F7, 168 cases in total; after F3b, 169 (169/169 with the system Python; one skips in a plain venv).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; after F3 and F7, 168 cases in total; after F3b, 169 (169/169 with the system Python; one skips in a plain venv); after F2 claim, 173.
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 169 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 173 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 169/169
+python3 evals/run_evals.py                       # expect 173/173
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -72,6 +72,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F3 | Of several matching lines, the best one is cited. Files rank state, config, `CLAUDE.md`/`AGENTS.md`, docs, code; a comment (`#`/`//` outside docs, `<!--` in docs), any `.gitignore` line and a Makefile target line are cited only when no other line matches. Pass/fail is unchanged by the ranking; only the citation moves. "Instruction file" cites `CLAUDE.md`/`AGENTS.md` before a definition of done elsewhere. "Verify command" no longer matches `.pytest_cache` (`\bpytest\b`) and never reads `.gitignore`. Three new cases (`.pytest_cache/` fails verify, a guard that a lone comment still counts, and one citation check with six fixtures). |
 | F7 | The scorer reconfigures stdout to UTF-8, so on Windows (cp1252 stdout by default) the report's `—` is no longer written as byte `0x97`. One new case runs the scorer with stdout wrapped as cp1252 (what Windows gives without `PYTHONIOENCODING`) and decodes the output as UTF-8 (168 cases together with F3). Tested on Linux with a simulated cp1252 stdout, not on Windows itself. |
 | F3b | Only known config files rank as config when choosing a citation: `.claude/settings*.json`, `package.json`, `hooks*.json`, `Makefile` and the non-JSON config suffixes. Any other `.json` is data and ranks last, below docs and code; it still counts when nothing else matches. A permission entry such as `"Bash(git worktree list)"` in a `.json` file is a weak line, cited only as a fallback. Pass/fail is unchanged by the ranking. To make the item's own fixture sentence match, the claim check now also accepts "claimed" (`\bclaim(?:ed)?\b`): "Each job is claimed by one worker." passed nothing before. One new case (two fixtures from the item, three guards): 169 cases; the lab's `make test` gives 168/168 (1 skipped). |
+| F2 claim | "Claim" as a noun for a statement no longer passes the claim check: a determiner (a, the, this, our…) plus at most one word before `claim` cancels it ("That is a testable claim.", "the claim"). A claim file, lock, step, node, record, marker or token still counts, and so do "claim a job" and "claimed by". Four new cases (two from the item, two guards): 173 cases; the lab's `make test` gives 172/172 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -127,7 +128,7 @@ On Windows, stdout is written as cp1252, so `—` becomes byte `0x97`. Fixture: 
 
 ### F2. Bare words with another meaning (one job per check)
 Each line below is a README sentence that passes today and should fail.
-- claim: "That is a testable claim."
+- claim: "That is a testable claim." Done (see section 4).
 - conditional edges: "The graph has 3397 edges." and "Edge-cache is on."
 - join: "`names.join(', ')`" in a code snippet in a `.md`.
 - ignore outcome: "Run `git check-ignore`." and "Use `--ignore=tests/slow`."
