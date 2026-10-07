@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 295 cases in total (one skips in a plain venv; the lab's `make test` gives 294/294 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 297 cases in total (one skips in a plain venv; the lab's `make test` gives 296/296 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 295 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 297 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 295/295
+python3 evals/run_evals.py                       # expect 297/297
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -106,6 +106,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F25 | A `status ==` comparison passes the conditional edges check only with a routing context: the word edge(s), route/routes/routed/routing, go(es) to, go(es) back, goto (also `goTo`), back to, next step, an arrow (`->`, `=>`, `→`) or a node name (intake, triage, fix, review, gate, planner, executor, verifier), on the same line or on the next line (the branch body). A branch word alone (if, elif, when, then, case, a ternary `? `) no longer counts, which replaces F22's list. So `if status == 'none':` / `    inbox += 1` fails, while "If status == failed, the edge goes back to fix.", `if (job.status === 'failed') goTo('fix');` and `elif status == 'failed':` / `        return 'fix'` (node name on the next line) still pass. The next-line rule is there for that last F22 guard; the item asked for context on the line only. Three new cases (the fixture from the item, the item's guard, and "When status == 'blocked', the next step is a person."; both guards passed before the fix): 287 cases; the lab's `make test` gives 286/286 (1 skipped). |
 | F26 | A `timeout` passes the budget check only with an agent or run context in its statement: agent(s), run(s)/running, job(s), turn(s) or claude as a word (an `_` or non-letter around it is fine, so `AGENT_TIMEOUT` and `run_agent(job)` count), or `timeout-minutes`. The statement is the line plus the earlier lines that end in an open bracket, a comma or a backslash (at most 10), so `subprocess.run(agent_cmd,` / `    timeout=600)` counts. A `.run` method call (`subprocess.run(`, `asyncio.run(`) is not a run context. F20's HTTP and F23's browser exclusions stay. So `subprocess.run([sys.executable, 'deploy.py'],` / `    capture_output=True, text=True, timeout=60)` and `CACHE_TIMEOUT = 300` fail. Other budget patterns (token budget, spend cap, budget of 30) are unchanged. By the pattern (no eval case), the bare "timeout." in the `STUFFED` fixture no longer counts for budget (no case pins it), and a Dutch run word ("draaien") is not a context. Four new cases (the fixture from the item, `CACHE_TIMEOUT = 300` in `settings.py`, and two guards that passed before the fix: the two-line `subprocess.run(agent_cmd, …)` call in `loop.py` and "Each run has a timeout of 10 minutes."; the item's guards were already pinned by the f2 ok cases): 293 cases; the lab's `make test` gives 292/292 (1 skipped). |
 | F27 | A route verb (route/routes/routed/routing) passes the conditional edges check without the word edge when the same line has a condition word (if, when, unless, else, otherwise, depending, based on, on pass/fail/failure/success/error/rejection/approval) and a node name (intake, triage, fix, review, gate, planner, executor, verifier). So "When the review fails, the graph routes back to fix." passes, while "Traffic routes through the CDN when the origin fails." (no node name) still fails. By the pattern (no eval case), a route with a generic word like "step" or "node" but no node name still fails, and the negation rule applies (decision 1). Two new cases (the fixture from the item, which failed before the fix, and the item's guard, which passed before the fix): 291 cases; the lab's `make test` gives 290/290 (1 skipped). |
+| F28 | The verb "times out after N" passes the budget check like a timeout: `time(s|d)/timing out after` and a number counts, with the same agent or run context as F26 (agent, run, job, turn, claude, on the line or the statement) and F20/F23's exclusions. So "Each agent run times out after 10 minutes." passes, while "Screenshots sometimes time out." (no amount, pinned by f2) and "The request times out after 10 seconds." (no run context) fail. By the pattern (no eval case), "times out in 10 minutes" or "after ten minutes" (a word, not a digit) does not count. Two new cases (the fixture from the item, and the request guard, which passed before the fix; the item's guard was already pinned by the f2 case): 295 cases; the lab's `make test` gives 294/294 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -281,7 +282,7 @@ Found with a synthetic probe during the F25 field check, not in a field repo: "W
 - Fixture: `README.md` "When the review fails, the graph routes back to fix." Expected: conditional edges passes.
 - Guard: `README.md` "Traffic routes through the CDN when the origin fails." still fails (no step or node).
 
-### F28. Budget: "times out after N minutes" (false fail)
+### F28. Budget: "times out after N minutes" (false fail): done (see section 4)
 Found with a synthetic probe during the F26 field check, not in a field repo: "Each agent run times out after 10 minutes." fails "budget" on main and after F26. It states a time budget for an agent run, but the check knows `timeout` (one word) and "budget", not the verb "times out".
 - Fixture: `README.md` "Each agent run times out after 10 minutes." Expected: budget passes.
 - Guard: `README.md` "Screenshots sometimes time out." still fails.
