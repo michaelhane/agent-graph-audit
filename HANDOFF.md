@@ -242,6 +242,11 @@ Found in the field check after F15: F15 skips UI code by folder name (`site/`, `
 - Fixture: `src/js/render.js` with `while (tooTall() && attempts < 12) { attempts++; }`. Expected: attempt cap fails. Also `scripts/generate.py` with `MAX_ATTEMPTS = 50` and `while made < n and attempts < MAX_ATTEMPTS:` and no job, fix or agent on those lines.
 - Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
 
+### F22. A view filter `status == "none"` counts as a conditional edge
+Found in the field check after F18: "conditional edges" passes on a design-doc table row `| Inbox | \`status == "none"\` |`, a list filter, through `STATUS_ROUTE_RE`, which accepts any `status == "<word>"` without a routing context.
+- Fixture: `README.md` with the table `| View | Filter |` / `| Inbox | \`status == "none"\` |`. Expected: conditional edges fails.
+- Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
