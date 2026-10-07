@@ -744,6 +744,27 @@ def best_line_cited(tmp: Path) -> list[str]:
     return errors
 
 
+def windows_stdout_utf8(tmp: Path) -> list[str]:
+    """The markdown report is UTF-8 even when stdout defaults to cp1252, as on Windows (item F7)."""
+    build(tmp, {"CLAUDE.md": "Be careful.\n"})
+    # Without PYTHONIOENCODING, Windows gives the scorer a cp1252 stdout; simulate that here.
+    code = (
+        "import io, runpy, sys\n"
+        "sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='cp1252', errors='strict')\n"
+        "sys.argv = sys.argv[1:]\n"
+        "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+    )
+    out = subprocess.run([sys.executable, *SCORER_FLAGS, "-c", code, str(SCORER), "--target", str(tmp)],
+                         capture_output=True)
+    if out.returncode != 0:
+        raise ScorerCrash(f"scorer exit {out.returncode}: {out.stderr.decode(errors='replace').strip()[-200:]}")
+    try:
+        text = out.stdout.decode("utf-8")
+    except UnicodeDecodeError as why:
+        return [f"stdout is not UTF-8: {why}"]
+    return [] if "# Agent setup score — " in text else ["report heading with an em dash not found"]
+
+
 SPECIAL = [
     *(repo_under(d) for d in ("artifacts", "build", "dist", "venv", "node_modules")),
     installed_skill("core files", ".claude/skills/agent-graph-audit", only_core=True),
@@ -764,6 +785,7 @@ SPECIAL = [
     ("gitignored and worktree copies are not scanned", out_of_scope_files),
     ("gitignored .claude/settings.json is read and cited", ignored_claude_settings),
     ("the best matching line is cited", best_line_cited),
+    ("report is UTF-8 on a cp1252 stdout", windows_stdout_utf8),
 ]
 
 

@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; after F3 the lab's `make test` gives 166/166 (1 skipped), 167 cases in total.
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; after F3 and F7, 168 cases in total (168/168 with the system Python; one skips in a plain venv).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 167 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 168 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 167/167
+python3 evals/run_evals.py                       # expect 168/168
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -69,7 +69,8 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | L2 venv | In a plain venv (user site off) the L2 eval now reports `skip` instead of failing, because that Python cannot load a user-site package at all. With the system Python it still runs: 154/154; in a plain venv: 153/153 (1 skipped). |
 | F1 | Scan scope. `.claude/worktrees/` is never entered, and paths that a `.gitignore` at or below the target ignores are not read (simple matcher: globs, `!`, trailing `/`, anchoring `/`; no global excludes or `.git/info/exclude`). Exceptions, each pinned by a guard case: state files are still read in ignored folders (ignored folders are walked, but only their state files are read), and an ignored `.env` is not read, so it no longer fails "no inline secrets"; a `.env` that is not ignored still fails. Six new cases: 160/160 with the system Python, 159/159 (1 skipped) in a plain venv. Speed is not re-measured yet (F8). |
 | F1b | `.claude/settings.json` and `.claude/settings.local.json` are read even when `.gitignore` ignores them, like state files, so "tool boundary" passes and cites them. Nothing else under an ignored `.claude/` is read, and `.claude/worktrees/` stays skipped. Four new cases (pass for each settings file, a guard that `.claude/notes.md` is not cited for human gate, and a citation/`files_scanned` check): 164 cases; the lab's `make test` gives 163/163 (1 skipped). |
-| F3 | Of several matching lines, the best one is cited. Files rank state, config, `CLAUDE.md`/`AGENTS.md`, docs, code; a comment (`#`/`//` outside docs, `<!--` in docs), any `.gitignore` line and a Makefile target line are cited only when no other line matches. Pass/fail is unchanged by the ranking; only the citation moves. "Instruction file" cites `CLAUDE.md`/`AGENTS.md` before a definition of done elsewhere. "Verify command" no longer matches `.pytest_cache` (`\bpytest\b`) and never reads `.gitignore`. Three new cases (`.pytest_cache/` fails verify, a guard that a lone comment still counts, and one citation check with six fixtures): 167 cases; the lab's `make test` gives 166/166 (1 skipped). |
+| F3 | Of several matching lines, the best one is cited. Files rank state, config, `CLAUDE.md`/`AGENTS.md`, docs, code; a comment (`#`/`//` outside docs, `<!--` in docs), any `.gitignore` line and a Makefile target line are cited only when no other line matches. Pass/fail is unchanged by the ranking; only the citation moves. "Instruction file" cites `CLAUDE.md`/`AGENTS.md` before a definition of done elsewhere. "Verify command" no longer matches `.pytest_cache` (`\bpytest\b`) and never reads `.gitignore`. Three new cases (`.pytest_cache/` fails verify, a guard that a lone comment still counts, and one citation check with six fixtures). |
+| F7 | The scorer reconfigures stdout to UTF-8, so on Windows (cp1252 stdout by default) the report's `—` is no longer written as byte `0x97`. One new case runs the scorer with stdout wrapped as cp1252 (what Windows gives without `PYTHONIOENCODING`) and decodes the output as UTF-8 (168 cases together with F3). Tested on Linux with a simulated cp1252 stdout, not on Windows itself. |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -110,7 +111,7 @@ Found in a field test after F1: a repo whose `.gitignore` lists `.claude/` lost 
 - "Work isolation" and "isolated workspace" cite a Makefile comment that mentions a worktree, while the README says the fix node makes a fresh worktree per attempt. Expected: a sentence that states the rule wins over an incidental mention.
 - General rule for F3: when several lines match, prefer config and state files, then instruction files, then docs. Never cite a comment, an ignore line or a make target when a better line exists.
 
-### F7. Windows report encoding
+### F7. Windows report encoding: done (see section 4)
 On Windows, stdout is written as cp1252, so `—` becomes byte `0x97`. Fixture: run the scorer without `PYTHONIOENCODING` and decode stdout as UTF-8. Fix: reconfigure stdout to UTF-8.
 
 ### F2. Bare words with another meaning (one job per check)

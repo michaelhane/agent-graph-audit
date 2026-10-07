@@ -1051,6 +1051,9 @@ def main() -> int:
     parser.add_argument("--target", required=True, help="Repo or folder to scan")
     parser.add_argument("--json", action="store_true", help="Print JSON instead of markdown")
     args = parser.parse_args()
+    # Windows writes stdout as cp1252 by default, which turns the report's "—" into byte 0x97.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     target = Path(args.target).resolve()
     if not target.exists():
         print(f"target not found: {target}", file=sys.stderr)
