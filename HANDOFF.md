@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 260 cases in total (one skips in a plain venv; the lab's `make test` gives 259/259 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 262 cases in total (one skips in a plain venv; the lab's `make test` gives 261/261 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 260 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 262 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 260/260
+python3 evals/run_evals.py                       # expect 262/262
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -94,6 +94,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F13 | A bare "budget" no longer passes the budget check. It needs an amount ("budget of 30 turns", "budget: 5", "$5 budget", "5 USD budget"), a run scope ("budget per run/job/attempt/turn/task/agent") or a run noun before it (run, job, turn, cost, time, step, spend, usd, dollar, compute, attempt budget). "The user's cognitive budget is finite." and a `budget` form field no longer count. Timeout, token budget, max minutes and spend cap are unchanged. Five new cases (the two fixtures from the item, and three guards that passed before the fix: "Each run has a budget of 30 turns.", "Each run has a $5 budget." and "… its budget per run is spent."): 250 cases; the lab's `make test` gives 249/249 (1 skipped). By the pattern (no eval case), `BUDGET_USD = 5` and `max_budget` never matched `\bbudget\b` and still do not count. |
 | F14 | `stuck` passes the repeated error exit check only on a line that also stops or hands off, with the same words as `twice` (stop, exit, halt, abort, end(s), escalate, give up, park or blocked), from one shared pattern: "If they're stuck, give a nudge." no longer counts. "Same error", "same failure" and the `twice` rule are unchanged. Three new cases (the fixture from the item, and two guards that passed before the fix: "When a job is stuck on the same error twice, stop and escalate." and "A job that stays stuck is parked for a human.", the second one with no other keyword): 252 cases; the lab's `make test` gives 251/251 (1 skipped). |
 | F16 | English parity for "stop bij de eerste fout" (decision 8): fail closed also accepts "stop/stops/stopping at/on the first error/failure" ("Stop at the first error.", "The pipeline stops on the first failure."). "First error" without a stop rule still fails. Three new cases (the fixture from the item in `CLAUDE.md`, the "stops on the first failure" form, and the guard "The first error was a typo.", which passed before the fix): 260 cases; the lab's `make test` gives 259/259 (1 skipped). |
+| F15 | A bare attempt counter in UI code no longer passes the attempt cap check: in a file under a `site`, `web`, `www`, `public`, `static`, `frontend`, `ui`, `components` or `assets` folder, the `attempt(s)` followed by `:`, `=` or `<` form does not count (`while (tooTall() && attempts < 12)` bounds a layout loop). Named caps (`MAX_ATTEMPTS = 3`, `max_retries: 3`, `stop_after_attempt(3)`) still count there, and the counter form still counts everywhere else. Two new cases (the fixture from the item, and the guard `MAX_ATTEMPTS = 3` with `if attempts >= MAX_ATTEMPTS: escalate(job)` in `loop.py`, which passed before the fix): 256 cases; the lab's `make test` gives 255/255 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -205,7 +206,7 @@ Found in the field check after F2 repeated error exit: a coaching doc passes "re
 - Fixture: `README.md` "If they're stuck, give a nudge." Expected: repeated error exit fails.
 - Guard: `README.md` "When a job is stuck on the same error twice, stop and escalate." still passes.
 
-### F15. A numeric loop bound in UI code counts as an attempt cap
+### F15. A numeric loop bound in UI code counts as an attempt cap: done (see section 4)
 Found in the field check after F2 attempt cap: a site renderer passes "attempt cap" on `while (el.scrollHeight > frameH + 2 && attempts < 12) {`, a shrink-to-fit loop, through `attempt(?:s)?\s*[:=<]\s*\d`. It bounds a layout loop, not an agent's fix attempts.
 - Fixture: `site/js/render.js` with `var attempts = 0;` and `while (tooTall() && attempts < 12) { attempts++; }`. Expected: attempt cap fails.
 - Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
@@ -233,6 +234,11 @@ Found in the field check after F12: a concept doc still passes "join" on "- Pay 
 Found in the field check after F13: "budget" passes on `resp = urllib.request.urlopen(req, timeout=10)` in a code snippet inside a `.claude/commands/*.md`, through `(?<![a-z])timeout`. It limits one HTTP call, not an agent run.
 - Fixture: `README.md` with a code block holding `resp = urllib.request.urlopen(req, timeout=10)`. Expected: budget fails.
 - Guard: `loop.py` with `AGENT_TIMEOUT = 600` and a workflow with `timeout-minutes: 30` still pass.
+
+### F21. Attempt cap: UI code outside the known folders, and non-agent retry caps
+Found in the field check after F15: F15 skips UI code by folder name (`site/`, `web/`, …), so the same shrink-to-fit loop under `src/js/compositor-renderer.js` still passes "attempt cap". Next in line is `MAX_ATTEMPTS = 50` capping retries in an image generator script, also not a cap on an agent's fix attempts.
+- Fixture: `src/js/render.js` with `while (tooTall() && attempts < 12) { attempts++; }`. Expected: attempt cap fails. Also `scripts/generate.py` with `MAX_ATTEMPTS = 50` and `while made < n and attempts < MAX_ATTEMPTS:` and no job, fix or agent on those lines.
+- Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
 
 ### Known limits (accepted for now, documented in README)
 

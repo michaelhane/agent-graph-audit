@@ -105,14 +105,23 @@ PLACEHOLDER_RE = re.compile(
 ENV_VAR_NAME_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
 # A numeric cap. "max attempts" alone (no number) no longer counts, and neither does
 # a counter that starts at 0 ("var attempts = 0").
-ATTEMPT_RE = re.compile(
-    r"(max[_\s-]?(?:attempts|retries)(?:\s*(?:of|is|to|at)?\s*|[^\n\d]{0,20}?[:=]\s*)\d"
+ATTEMPT_NAMED = (
+    r"max[_\s-]?(?:attempts|retries)(?:\s*(?:of|is|to|at)?\s*|[^\n\d]{0,20}?[:=]\s*)\d"
     r"|\bstop_after_attempt\(\s*\d"
-    r"|attempt(?:s)?\s*[:=<]\s*(?!0\b)\d"
     r"|retry(?:\s+cap)?\s*(?:of|at|<=|:)?\s*\d"
-    r"|\bmax(?:imum)?\s+(?:of\s+)?\d+\s+(?:attempts|retries|tries)\b)",
-    re.I,
+    r"|\bmax(?:imum)?\s+(?:of\s+)?\d+\s+(?:attempts|retries|tries)\b"
 )
+# A bare counter compared or set to a number: "while (attempts < 3)", "attempts=3".
+ATTEMPT_COUNTER = r"attempt(?:s)?\s*[:=<]\s*(?!0\b)\d"
+ATTEMPT_RE = re.compile(f"({ATTEMPT_NAMED}|{ATTEMPT_COUNTER})", re.I)
+ATTEMPT_NAMED_RE = re.compile(f"({ATTEMPT_NAMED})", re.I)
+# UI code: a bare counter there bounds a layout loop ("while (tooTall() && attempts < 12)"),
+# not an agent's fix attempts (item F15). A named cap there still counts.
+UI_DIRS = {"site", "web", "www", "public", "static", "frontend", "ui", "components", "assets"}
+
+
+def ui_code(name: str) -> bool:
+    return any(part.lower() in UI_DIRS for part in Path(name).parts[:-1])
 
 # Negation. A match is negated when one of the 4 words before it, in the same
 # clause, is a negator: "we do not use a worktree", "there is no allowlist".
@@ -802,7 +811,9 @@ def loop_checks(files: list[tuple[str, list[str]]]) -> dict:
     closed = cite_any(prose, [FAIL_CLOSED_RE.pattern])
     repeated = cite_any(prose, [r"same error", r"same failure", TWICE_EXIT_RE, STUCK_EXIT_RE])
     claim = cite_claim(prose)
-    attempt_cap = cite_affirmed(files, [ATTEMPT_RE.pattern])
+    attempt_cap = cite_affirmed([f for f in files if not ui_code(f[0])], [ATTEMPT_RE.pattern]) or cite_affirmed(
+        [f for f in files if ui_code(f[0])], [ATTEMPT_NAMED_RE.pattern]
+    )
     workspace = cite_affirmed(files, [r"worktree", r"per job"], shared_words=True)
     checks = [
         (
