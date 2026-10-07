@@ -565,6 +565,15 @@ CASES = [
     ("f13 ok: a $5 budget", {"README.md": "Each run has a $5 budget.\n"}, {"pass:budget": True}),
     ("f13 ok: budget per run", {"README.md": "The agent stops when its budget per run is spent.\n"},
      {"pass:budget": True}),
+    # "Stuck" with no stop or hand-off on the line is not a repeated-error exit (item F14).
+    ("f14: stuck without a stop rule", {"README.md": "If they're stuck, give a nudge.\n"},
+     {"fail:repeated error exit": True}),
+    # Guards: stuck with a stop or escalation on the line still counts.
+    ("f14 ok: stuck on the same error stops",
+     {"README.md": "When a job is stuck on the same error twice, stop and escalate.\n"},
+     {"pass:repeated error exit": True}),
+    ("f14 ok: stuck job is parked", {"README.md": "A job that stays stuck is parked for a human.\n"},
+     {"pass:repeated error exit": True}),
 ]
 
 
