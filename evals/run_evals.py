@@ -554,6 +554,13 @@ CASES = [
     ("f12: join our list is membership", {"README.md": "Join our mailing list for updates.\n"}, {"fail:join": True}),
     # Guard: branches that join still count.
     ("f12 ok: reviews join", {"README.md": "The merge step waits for both reviews to join.\n"}, {"pass:join": True}),
+    # "Join" with a group as its object is membership too (item F19).
+    ("f19: join the club is membership", {"README.md": "Pay a membership fee to join the club.\n"},
+     {"fail:join": True}),
+    ("f19: join our community is membership", {"README.md": "Join our community.\n"}, {"fail:join": True}),
+    # Guards: branches that join, and a join node, still count.
+    ("f19 ok: reviews join", {"README.md": "The merge step waits for both reviews to join.\n"}, {"pass:join": True}),
+    ("f19 ok: a join node", {"README.md": "Both branches meet at a join node.\n"}, {"pass:join": True}),
     # "Budget" with no amount or run scope is not a run budget (item F13).
     ("f13: cognitive budget is not a run budget", {"README.md": "The user's cognitive budget is finite.\n"},
      {"fail:budget": True}),
