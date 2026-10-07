@@ -591,6 +591,17 @@ CASES = [
     ("f15 ok: MAX_ATTEMPTS in loop.py",
      {"loop.py": "MAX_ATTEMPTS = 3\nif attempts >= MAX_ATTEMPTS: escalate(job)\n"},
      {"pass:attempt cap": True}),
+    # A "=== Status ===" banner is not a status comparison (item F18).
+    ("f18: status banner is not a conditional edge",
+     {"README.md": "Example:\n\n```python\nprint('=== Review Status ===')\n```\n"},
+     {"fail:conditional edges": True}),
+    # Guards: a status compared with a value still counts, also with JS's ===.
+    ("f18 ok: status == failed routes back to fix",
+     {"README.md": "If status == failed, the edge goes back to fix.\n"},
+     {"pass:conditional edges": True}),
+    ("f18 ok: status === 'failed' in JS",
+     {"README.md": "```js\nif (job.status === 'failed') goTo('fix');\n```\n"},
+     {"pass:conditional edges": True}),
 ]
 
 

@@ -916,7 +916,9 @@ EDGE_WORD_RE = (
 )
 # A status compared with a number is an HTTP or exit-code check, not a route (item F11):
 # "resp.status == 200", "assert status == 401". "status == failed" still counts.
-STATUS_ROUTE_RE = r"status ==(?!\s*\d)"
+# A "=== Status ===" banner is not a comparison (item F18): "===" counts only with a
+# space and a value after it, as in "status === 'failed'".
+STATUS_ROUTE_RE = r"""status ==(?:=(?=\s+[a-z'"]))?(?!=)(?!\s*\d)"""
 # An edge is conditional only with a condition on the same line (item F2):
 # "3397 edges" or "Edge-cache is on" is not one. A number right before "edges" is a
 # count and never counts, even next to a condition word (item F11).
