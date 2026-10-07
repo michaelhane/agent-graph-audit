@@ -524,6 +524,13 @@ CASES = [
      {"fail:claim": True}),
     # Guard: a job claimed by a worker still counts.
     ("f9 ok: claimed by one worker", {"README.md": "Each job is claimed by one worker.\n"}, {"pass:claim": True}),
+    # "In progress" in plain prose is not a job status (item F10).
+    ("f10: build in progress is prose", {"README.md": "Photos of the build in progress.\n"}, {"fail:claim": True}),
+    # Guards: a status value in a state file, and a doc that marks a job in progress, still count.
+    ("f10 ok: status in progress in jobs.json", {"jobs.json": '[{"job_id": "a1", "status": "in progress"}]\n'},
+     {"pass:claim": True}),
+    ("f10 ok: job marked in progress", {"README.md": "A worker marks the job in progress before it starts.\n"},
+     {"pass:claim": True}),
 ]
 
 
