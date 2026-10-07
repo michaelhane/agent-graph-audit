@@ -751,6 +751,13 @@ def secret_hit(files: list[tuple[str, list[str]]]) -> str | None:
     return None
 
 
+# An HTTP client call on the line: its timeout limits one request, not an agent run (item F20).
+HTTP_CALL_RE = re.compile(
+    r"\b(?:urlopen|requests\.(?:get|post|put|patch|delete|head|request)|httpx\.\w+|aiohttp\.\w+|fetch)\s*\(",
+    re.I,
+)
+
+
 def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     found = secret_hit(files)
     instruction = instruction_cite(files)
@@ -776,7 +783,8 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     # A letter before "timeout" makes it a call or field name (setTimeout, clearTimeout), not a run budget (F2).
     # "Budget" alone ("cognitive budget", a `budget` form field) is not a run budget: it needs an amount
     # ("budget of 30", "$5 budget", "budget: 5"), a run scope ("budget per run") or a run noun before it (F13).
-    budget = cite_affirmed(
+    # A timeout on one HTTP request (urlopen, requests.get, httpx, fetch) limits that call, not a run (F20).
+    budget = best_cite(
         files,
         [
             r"(?<![a-z])timeout",
@@ -788,6 +796,8 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
             r"\b(?:run|job|turn|cost|time|step|spend|usd|dollar|compute|attempt)\s+budget\b",
             r"spend cap",
         ],
+        lambda cre, line: not (cre.pattern == r"(?<![a-z])timeout" and HTTP_CALL_RE.search(line))
+        and any(not negated(line, m.start(), m.end()) for m in cre.finditer(line)),
     )
     checks = [
         (
