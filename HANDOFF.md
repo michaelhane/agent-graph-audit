@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 183 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 188 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -76,6 +76,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F2 join | A method call in a doc snippet no longer passes the join check: `join` right after a `.` or right before `(` does not count ("`names.join(', ')`"). "Meet at a join", a `join` node, "wait for", `needs: [a, b]` and `add_edge([a, b], c)` still count. Two new cases (the fixture from the item, and a guard for "The `join` node merges both branches."): 179 cases; the lab's `make test` gives 178/178 (1 skipped). |
 | F3c | "Verify command" also accepts a test script run directly: `python`/`python3`/`node`/`bash`/`sh`, optional flags, then a `.py`/`.js`/`.ts`/`.sh` path with `test`, `tests` or `spec` in it at a word start (`python tests/test_gate.py`, `node tests/x.test.js`, `bash tests/run.sh`). By the pattern (no eval case), `python latest.py` or `python setup.py` does not count. Four new cases (the three fixtures from the item, and the guard "We should add tests some day." still fails): 173 cases; the lab's `make test` gives 172/172 (1 skipped). |
 | F2 conditional edges | The word "edge(s)" passes "conditional edges" only on a line that also has a condition: if, when, unless, else, otherwise, condition(s)/conditional(ly), depending, based on, route/routes/routed/routing, "on pass/fail/failure/success/error/reject(ion)/approval", or `==`. A hyphen compound ("Edge-cache") is not an edge. "Tests passed", "status ==" and `add_conditional_edges(` are unchanged. Four new cases (the two fixtures from the item, and two guards: "On failure, the edge goes back to fix." and "Edges from review are routed by the job status." still pass): 181 cases; the lab's `make test` gives 180/180 (1 skipped). |
+| F2 budget | `timeout` right after a letter no longer passes the budget check, so a timer call such as `setTimeout(fn, 100)` (or `clearTimeout`) in a doc snippet does not count. `timeout-minutes`, `AGENT_TIMEOUT`, `timeout=` and "a timeout of 30 minutes" still count. "Screenshots sometimes time out." already failed (the pattern needs the single word `timeout`); its case is a guard that passed before the fix. Five new cases (the two fixtures from the item, and three guards): 188 cases; the lab's `make test` gives 187/187 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -135,7 +136,7 @@ Each line below is a README sentence that passes today and should fail.
 - conditional edges: "The graph has 3397 edges." and "Edge-cache is on." Done (see section 4).
 - join: "`names.join(', ')`" in a code snippet in a `.md`. Done (see section 4).
 - ignore outcome: "Run `git check-ignore`." and "Use `--ignore=tests/slow`."
-- budget: "`setTimeout(fn, 100)`" and "Screenshots sometimes time out."
+- budget: "`setTimeout(fn, 100)`" and "Screenshots sometimes time out." Done (see section 4).
 - repeated error exit: "It crashed twice last week."
 - trace: "Trace the bug back to the parser."
 - bounded cycle: "Cost is bounded per turn."

@@ -409,6 +409,15 @@ CASES = [
      {"pass:conditional edges": True}),
     ("f2 ok: edges routed by status", {"README.md": "Edges from review are routed by the job status.\n"},
      {"pass:conditional edges": True}),
+    # A JS timer call and "time out" as a verb are not a run budget (F2 budget).
+    ("f2: setTimeout in a doc is not a budget", {"README.md": "`setTimeout(fn, 100)`\n"}, {"fail:budget": True}),
+    ("f2: screenshots time out is not a budget", {"README.md": "Screenshots sometimes time out.\n"},
+     {"fail:budget": True}),
+    # Guards: a stated timeout, a workflow timeout and a timeout setting in code still count.
+    ("f2 ok: job timeout in docs", {"README.md": "Each job has a timeout of 30 minutes.\n"}, {"pass:budget": True}),
+    ("f2 ok: timeout-minutes in a workflow", {".github/workflows/ci.yml": "    timeout-minutes: 30\n"},
+     {"pass:budget": True}),
+    ("f2 ok: AGENT_TIMEOUT in code", {"loop.py": "AGENT_TIMEOUT = 600\n"}, {"pass:budget": True}),
 ]
 
 
