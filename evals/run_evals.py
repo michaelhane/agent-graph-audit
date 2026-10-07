@@ -395,6 +395,16 @@ CASES = [
     # Guard: an intention to test is not a command.
     ("verify: tests some day is not a command", {"CLAUDE.md": "We should add tests some day.\n"},
      {"fail:verify command": True}),
+    # An edge counts only with a condition on the line (field-test item F2, conditional edges).
+    ("f2: a count of edges is not a conditional edge", {"README.md": "The graph has 3397 edges.\n"},
+     {"fail:conditional edges": True}),
+    ("f2: edge-cache is not an edge", {"README.md": "Edge-cache is on.\n"},
+     {"fail:conditional edges": True}),
+    # Guards: an edge taken on a condition still counts.
+    ("f2 ok: edge on failure", {"README.md": "On failure, the edge goes back to fix.\n"},
+     {"pass:conditional edges": True}),
+    ("f2 ok: edges routed by status", {"README.md": "Edges from review are routed by the job status.\n"},
+     {"pass:conditional edges": True}),
 ]
 
 
