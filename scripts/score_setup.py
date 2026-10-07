@@ -834,7 +834,8 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
     config = of_kind(files, "config")
     code = of_kind(files, "code")
     edges = cite_cond_edge(prose) or cite(code, COND_EDGE_CODE_RE)
-    ignore = cite_affirmed(docs, [r"\bignore\b", r"wontfix", r"won't fix", r"not fixable"]) or cite_any(
+    # A command or flag (`git check-ignore`, `--ignore=tests/slow`) is not an ignore outcome.
+    ignore = cite_affirmed(docs, [r"(?<![-\w])ignore\b(?![-=])", r"wontfix", r"won't fix", r"not fixable"]) or cite_any(
         config + code, [IGNORE_VALUE_RE]
     )
     bounded = cite_affirmed(prose, [r"\bbounded\b", r"retry edge", r"max attempts"]) or cite(code, BOUND_CODE_RE)
