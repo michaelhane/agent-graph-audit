@@ -1085,9 +1085,17 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
     bounded = cite_bounded(prose) or cite(code, BOUND_CODE_RE)
     join = (
         # A method call such as names.join(', ') in a doc snippet is not a join. Neither is
-        # join as becoming a member: "why join?", "join us", "join our list" (item F12).
+        # join as becoming a member: "why join?", "join us", "join our list" (item F12), or
+        # "join" with a group as its object: "join the club" (item F19).
         cite_affirmed(
-            prose, [r"(?<!\.)(?<!\bwhy )\bjoin\b(?!\.\w|\(|\s+(?:us|our)\b)", r"wait for", r"partial diff"]
+            prose,
+            [
+                r"(?<!\.)(?<!\bwhy )\bjoin\b(?!\.\w|\(|\s+(?:us|our)\b|\s+(?:the|a|an|this|that|my|your)\s+"
+                r"(?:club|community|group|team|society|association|guild|movement|crowd|ranks|cause|party"
+                r"|mailing list|newsletter|waitlist|waiting list|server|discord|slack|forum|channel)\b)",
+                r"wait for",
+                r"partial diff",
+            ],
         )
         or cite(config, JOIN_CONFIG_RE)
         or cite(code, JOIN_CODE_RE)
