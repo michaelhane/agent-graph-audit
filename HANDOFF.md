@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-06
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; after F3 and F7, 191 cases in total (191/191 with the system Python; one skips in a plain venv).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; after F3 and F7, 191 cases in total (191/191 with the system Python; one skips in a plain venv); after F2 repeated error exit, 195 cases.
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 191 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 195 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 191/191
+python3 evals/run_evals.py                       # expect 195/195
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -78,6 +78,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F2 conditional edges | The word "edge(s)" passes "conditional edges" only on a line that also has a condition: if, when, unless, else, otherwise, condition(s)/conditional(ly), depending, based on, route/routes/routed/routing, "on pass/fail/failure/success/error/reject(ion)/approval", or `==`. A hyphen compound ("Edge-cache") is not an edge. "Tests passed", "status ==" and `add_conditional_edges(` are unchanged. Four new cases (the two fixtures from the item, and two guards: "On failure, the edge goes back to fix." and "Edges from review are routed by the job status." still pass): 181 cases; the lab's `make test` gives 180/180 (1 skipped). |
 | F2 ignore outcome | A command or flag in a doc no longer passes the ignore outcome check: `ignore` right after a `-` or a word character, or right before `-` or `=`, does not count ("Run `git check-ignore`.", "Use `--ignore=tests/slow`."). "Triage can ignore a job that is out of scope." still counts. Three new cases (the two fixtures from the item, and that guard): 186 cases; the lab's `make test` gives 185/185 (1 skipped). |
 | F2 budget | `timeout` right after a letter no longer passes the budget check, so a timer call such as `setTimeout(fn, 100)` (or `clearTimeout`) in a doc snippet does not count. `timeout-minutes`, `AGENT_TIMEOUT`, `timeout=` and "a timeout of 30 minutes" still count. "Screenshots sometimes time out." already failed (the pattern needs the single word `timeout`); its case is a guard that passed before the fix. Five new cases (the two fixtures from the item, and three guards): 188 cases; the lab's `make test` gives 187/187 (1 skipped). |
+| F2 repeated error exit | `twice` passes the repeated error exit check only on a line that also stops or hands off: stop, exit, halt, abort, end(s), escalate, give up, park or blocked ("It crashed twice last week." no longer counts). "Same error", "same failure" and "stuck" are unchanged. Four new cases (the fixture from the item, and three guards: "If a check fails twice in a row, the job stops.", "Escalate to a human when a fix fails twice." and "The same error on two attempts ends the job." still pass): 195 cases; the lab's `make test` gives 194/194 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -138,7 +139,7 @@ Each line below is a README sentence that passes today and should fail.
 - join: "`names.join(', ')`" in a code snippet in a `.md`. Done (see section 4).
 - ignore outcome: "Run `git check-ignore`." and "Use `--ignore=tests/slow`." Done (see section 4).
 - budget: "`setTimeout(fn, 100)`" and "Screenshots sometimes time out." Done (see section 4).
-- repeated error exit: "It crashed twice last week."
+- repeated error exit: "It crashed twice last week." Done (see section 4).
 - trace: "Trace the bug back to the parser."
 - bounded cycle: "Cost is bounded per turn."
 - attempt cap: `var attempts = 0` (no bound).
