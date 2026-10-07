@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # EVAL_SCORER swaps in another scorer. Only the crash check below uses it.
@@ -918,6 +919,66 @@ def windows_stdout_utf8(tmp: Path) -> list[str]:
     return [] if "# Agent setup score — " in text else ["report heading with an em dash not found"]
 
 
+LARGE_REPO_FILES = 3000
+LARGE_REPO_SECONDS = 10.0
+
+
+def large_repo_speed(tmp: Path) -> list[str]:
+    """3,000 files of 200 lines each, almost none of them evidence, score in under 10 s (item F8).
+    Matches deep inside a large file are still cited at their own line."""
+    makers = {
+        ".py": lambda i, j: f"def helper_{i}_{j}(value):\n    return value * {j} + {i}",
+        ".md": lambda i, j: f"Section {j} of page {i} describes the layout of the widget and its colours.",
+        ".js": lambda i, j: f"const v{j} = compute({j}, {i}); // widget layout",
+        ".json": lambda i, j: f'  "key_{j}": "value {j} for record {i}",',
+        ".yml": lambda i, j: f"key_{j}: value {j} for record {i}",
+    }
+    suffixes = list(makers)
+    files = {".gitignore": ".env\ncache/\n*.log\n!keep.log\n/out/\n", "CLAUDE.md": "Run pytest before you finish.\n"}
+    for i in range(LARGE_REPO_FILES):
+        suffix = suffixes[i % len(suffixes)]
+        lines = [makers[suffix](i, j) for j in range(200 if suffix != ".py" else 100)]
+        files[f"pkg{i % 30}/sub{i % 7}/f{i}{suffix}"] = "\n".join(lines) + "\n"
+    deep = [makers[".md"](0, j) for j in range(200)]
+    deep[149] = "Each job runs in its own worktree."
+    deep[119] = "If a check fails twice in a row, the job stops."
+    files["pkg0/sub0/f0.md"] = "\n".join(deep) + "\n"
+    # A lookahead at the end of a line must not see the next line: "edge" then "computing".
+    files["docs/routes.md"] = "If review fails, the route goes back along the edge\ncomputing nothing else.\n"
+    build(tmp, files)
+    start = time.monotonic()
+    data = score(tmp)
+    elapsed = time.monotonic() - start
+    errors = []
+    if elapsed >= LARGE_REPO_SECONDS:
+        errors.append(f"took {elapsed:.1f} s on {data['files_scanned']} files, want under {LARGE_REPO_SECONDS:.0f} s")
+    # Plus .gitignore, CLAUDE.md, pkg0/sub0/f0.md and docs/routes.md.
+    if data["files_scanned"] != LARGE_REPO_FILES + 4:
+        errors.append(f"files_scanned {data['files_scanned']}, want {LARGE_REPO_FILES + 4}")
+    checks = {c["name"]: c for layer in ("harness", "loop", "graph") for c in data[layer]["checks"]}
+    for check, want in [("work isolation", "pkg0/sub0/f0.md:150"), ("repeated error exit", "pkg0/sub0/f0.md:120"),
+                        ("conditional edges", "docs/routes.md:1"), ("verify command", "CLAUDE.md:1")]:
+        if checks[check]["citation"] != want:
+            errors.append(f"{check}: citation {checks[check]['citation']!r}, want {want!r}")
+    return errors
+
+
+def prefilter_keeps_case_and_unicode(tmp: Path) -> list[str]:
+    """Guard for item F8's whole-file prefilter: an uppercase keyword in ASCII text, and one in
+    a file with non-ASCII text, are still cited at their own line."""
+    cases = [
+        ("verify command", {"CLAUDE.md": "Notes.\nRun PYTEST before you finish.\n"}, "CLAUDE.md:2"),
+        ("conditional edges", {"README.md": "Café rules.\nIf the check FAILS, the EDGE goes back to fix.\n"},
+         "README.md:2"),
+    ]
+    errors = []
+    for n, (check, files, want) in enumerate(cases):
+        got = citation_of(tmp / f"c{n}", files, check)
+        if got != want:
+            errors.append(f"{check}: citation {got!r}, want {want!r}")
+    return errors
+
+
 SPECIAL = [
     *(repo_under(d) for d in ("artifacts", "build", "dist", "venv", "node_modules")),
     installed_skill("core files", ".claude/skills/agent-graph-audit", only_core=True),
@@ -941,6 +1002,8 @@ SPECIAL = [
     ("report is UTF-8 on a cp1252 stdout", windows_stdout_utf8),
     ("data .json ranks below docs", data_json_ranks_below_docs),
     ("a review-gate config is cited before a README gate", config_gate_cited),
+    ("3,000 files score in under 10 s", large_repo_speed),
+    ("prefilter keeps uppercase and non-ASCII matches", prefilter_keeps_case_and_unicode),
 ]
 
 

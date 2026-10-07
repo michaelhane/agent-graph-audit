@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import functools
 import json
 import os
 import re
@@ -346,6 +347,7 @@ CONFIG_JSON_RE = re.compile(r"(?:.*/)?(?:\.claude/settings(?:\.local)?|hooks[^/]
 PERMISSION_ENTRY_RE = re.compile(r'^\s*"\w+\(.*\)"\s*,?\s*$')
 
 
+@functools.cache  # every best_cite call sorts all files by it (item F8)
 def file_rank(name: str) -> int:
     """Which file to cite first when several match: state, config, instruction files, docs, code, data.
 
@@ -380,16 +382,70 @@ def weak_line(name: str, line: str) -> bool:
     return path.name == "Makefile" and MAKE_TARGET_RE.match(line) is not None
 
 
+# Lines joined for a whole-file search (item F8). The "\x00" keeps a lookahead at the end of
+# a line from seeing the next line ("edge" then "computing"), and with re.M the "\n" lets "^"
+# match at each line start. Any line that matches a pattern alone then also matches in the
+# joined text, so a file without a match there can be skipped. Patterns may not use "$".
+LINE_JOIN = "\x00\n"
+_joined: dict[int, tuple[list[str], str, str | None]] = {}
+
+
+def _file_texts(lines: list[str]) -> tuple[list[str], str, str | None]:
+    entry = _joined.get(id(lines))
+    if entry is None or entry[0] is not lines:
+        text = LINE_JOIN.join(lines)
+        entry = (lines, text, text.lower() if text.isascii() else None)
+        _joined[id(lines)] = entry
+    return entry
+
+
+def joined(lines: list[str]) -> str:
+    """The file's lines as one text, joined once per file and reused by every check."""
+    return _file_texts(lines)[1]
+
+
+def joined_lower(lines: list[str]) -> str | None:
+    """The joined text lowercased, or None if it is not all ASCII.
+
+    On ASCII text, a case-sensitive search of the lowercased text finds the same as an
+    re.I search when the pattern has no uppercase letter, and it is several times faster.
+    """
+    return _file_texts(lines)[2]
+
+
+def has_upper_literal(pattern: str) -> bool:
+    """True if the pattern has an uppercase letter outside an escape such as \\S or \\B."""
+    return any(c.isupper() for c in re.sub(r"\\.", "", pattern))
+
+
+# A leading \b or lookbehind: zero-width, and it stops the regex engine from scanning for
+# the literal that follows. The prefilter drops it, which only lets more files through.
+LEADING_ASSERTIONS_RE = re.compile(r"^(?:\\b|\(\?<[!=](?:[^()\\]|\\.)*\))+")
+
+
+def prefilter_pattern(pattern: str) -> str:
+    """The pattern for the whole-file search: the same, minus leading zero-width assertions."""
+    return LEADING_ASSERTIONS_RE.sub("", pattern)
+
+
 def best_cite(files: list[tuple[str, list[str]]], patterns: list[str], hit) -> str | None:
     """The best line where hit(compiled pattern, line) is true.
 
     Files are tried in file_rank order, so the first strong line is the best one. A weak
-    line is kept as a fallback and cited only if no strong line matches anywhere.
+    line is kept as a fallback and cited only if no strong line matches anywhere. Every
+    hit needs a pattern match, so lines are only tried in files whose joined text matches.
     """
-    regs = [re.compile(p, re.I) for p in patterns]
+    regs = []
+    for p in patterns:
+        pre = prefilter_pattern(p)
+        fast = None if has_upper_literal(pre) else re.compile(pre, re.M)
+        regs.append((re.compile(p, re.I), re.compile(pre, re.I | re.M), fast))
     fallback = None
     for name, lines in sorted(files, key=lambda f: file_rank(f[0])):
-        for cre in regs:
+        text, low = joined(lines), joined_lower(lines)
+        for cre, whole, fast in regs:
+            if not (fast.search(low) if fast and low is not None else whole.search(text)):
+                continue
             for i, line in enumerate(lines, start=1):
                 if hit(cre, line):
                     if not weak_line(name, line):
@@ -406,6 +462,7 @@ def cite_any(files: list[tuple[str, list[str]]], patterns: list[str]) -> str | N
     return best_cite(files, patterns, lambda cre, line: cre.search(line) is not None)
 
 
+@functools.cache
 def file_kind(name: str) -> str:
     path = Path(name)
     suffix = path.suffix.lower()
@@ -576,8 +633,14 @@ def not_a_secret(key: str, value: str) -> bool:
     return PLACEHOLDER_RE.search(value) is not None
 
 
+# Both secret patterns need one of these words in the key; a file without one is skipped (item F8).
+SECRET_WORD_RE = re.compile(r"api[_-]?key|secret|token|password", re.I)
+
+
 def secret_hit(files: list[tuple[str, list[str]]]) -> str | None:
     for name, lines in files:
+        if not SECRET_WORD_RE.search(joined(lines)):
+            continue
         env_file = is_env_file(name)
         for i, line in enumerate(lines, start=1):
             pairs = [(m["key"], m["value"]) for m in SECRET_QUOTED_RE.finditer(line)]
@@ -777,6 +840,8 @@ def logical_lines(lines: list[str]):
 
 def auto_merge_cite(files: list[tuple[str, list[str]]]) -> str | None:
     for name, lines in files:
+        if "auto" not in joined(lines).lower():
+            continue  # both spellings need "auto" (item F8)
         for i, text in logical_lines(lines):
             if AUTO_MERGE_RE.search(text):
                 return f"{name}:{i}"
@@ -844,6 +909,9 @@ def node_names(files: list[tuple[str, list[str]]]) -> tuple[set[str], str | None
     first = None
     for name, lines in files:
         kind = file_kind(name)
+        # A file that names no node, or code with no add_node( call, has no hit (item F8).
+        if not (ADD_NODE_RE if kind == "code" else NODE_NAME_RE).search(joined(lines)):
+            continue
         for i, line in enumerate(lines, start=1):
             if kind == "code":
                 hits = {m.group(1).lower() for m in ADD_NODE_RE.finditer(line)}
