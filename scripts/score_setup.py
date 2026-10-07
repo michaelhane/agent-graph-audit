@@ -130,10 +130,12 @@ NEGATED_AFTER_RE = re.compile(
 )
 CLAUSE_BREAK_RE = re.compile(r"[.;:!?,]")
 # pytest followed by a version specifier or extras is a dependency line, not a command,
-# and .pytest_cache is a folder name.
+# and .pytest_cache is a folder name. A test script run directly counts too:
+# `python tests/test_gate.py`, `node tests/x.test.js`, `bash tests/run.sh`.
 VERIFY_CMD_RE = re.compile(
     r"(npm test|\bpytest\b(?!\s*[<>=!~\[])|go test|cargo test|pnpm test|yarn test|make test"
-    r"|npm run (?:lint|typecheck|test)\b)",
+    r"|npm run (?:lint|typecheck|test)\b"
+    r"|\b(?:python3?|node|bash|sh)\s+(?:-\S+\s+)*[\w./-]*(?<![a-z])(?:tests?|spec)[\w./-]*\.(?:py|[cm]?[jt]s|sh)\b)",
     re.I,
 )
 FAIL_CLOSED_RE = re.compile(r"(fail closed|exit code|must pass|non-zero)", re.I)
