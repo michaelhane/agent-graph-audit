@@ -803,6 +803,8 @@ BROWSER_STEP_RE = re.compile(r"\b(?:page|frame)\.(?:goto|wait_?for\w*)\s*\(", re
 TIMEOUT_CONTEXT_RE = re.compile(
     r"(?<![a-z])(?:agents?|runs?|running|jobs?|turns?|claude)(?![a-z])(?<!\.run)|timeout-minutes", re.I
 )
+# "Times out after 10 minutes": the verb with an amount (item F28).
+TIMES_OUT_AFTER_RE = re.compile(r"\btim(?:e|es|ed|ing)[\s-]+out\s+after\s+\d", re.I)
 # A line that ends open: the statement goes on, on the next line.
 CONTINUED_RE = re.compile(r"[(\[{,\\]\s*$")
 
@@ -853,10 +855,13 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     # So does one on a browser step (page.goto, page.waitForSelector) (F23).
     # A timeout needs an agent or run context in its statement (F26): `timeout=60` on a deploy script's
     # subprocess call is not a run budget, while AGENT_TIMEOUT and timeout-minutes are.
+    # The verb "times out after 10 minutes" counts like a timeout: it needs an amount and the same
+    # agent or run context, so "Screenshots sometimes time out." does not (F28).
     budget = best_cite(
         files,
         [
             r"(?<![a-z])timeout",
+            TIMES_OUT_AFTER_RE.pattern,
             r"token budget",
             r"max minutes",
             r"\bbudget\s*(?:of|is|:|=)?\s*[$€]?\d",
@@ -865,7 +870,10 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
             r"\b(?:run|job|turn|cost|time|step|spend|usd|dollar|compute|attempt)\s+budget\b",
             r"spend cap",
         ],
-        lambda cre, line, lines, idx: (cre.pattern != r"(?<![a-z])timeout" or timeout_in_context(line, lines, idx))
+        lambda cre, line, lines, idx: (
+            cre.pattern not in (r"(?<![a-z])timeout", TIMES_OUT_AFTER_RE.pattern)
+            or timeout_in_context(line, lines, idx)
+        )
         and any(not negated(line, m.start(), m.end()) for m in cre.finditer(line)),
         with_lines=True,
     )

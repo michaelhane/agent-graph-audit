@@ -707,6 +707,15 @@ CASES = [
     ("f27 ok: CDN routing is not a conditional edge",
      {"README.md": "Traffic routes through the CDN when the origin fails.\n"},
      {"fail:conditional edges": True}),
+    # "Times out after N minutes" for an agent run is a run budget (item F28).
+    ("f28: agent run times out after 10 minutes",
+     {"README.md": "Each agent run times out after 10 minutes.\n"},
+     {"pass:budget": True}),
+    # Guards: the verb without an amount ("Screenshots sometimes time out.": see f2), or with an amount
+    # but no agent or run context (as for timeout, F26), still fails.
+    ("f28: a request that times out after 10 seconds is not a run budget",
+     {"README.md": "The request times out after 10 seconds.\n"},
+     {"fail:budget": True}),
 ]
 
 
