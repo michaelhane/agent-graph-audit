@@ -48,7 +48,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 | Check | Weight | Award | Passes when |
 |---|---:|---:|---|
 | Claim | 15 | 15 | Claim or claimed, in progress (as a status), lock file, or already taken, in docs or config. *neg* |
-| Attempt cap | 20 | 20 | A numeric retry or attempt cap: `max_attempts: 3`, `MAX_RETRIES = 3`, `stop_after_attempt(3)`, `max 3 attempts`, `retry 2`. A "token budget of N" is not an attempt cap. "max attempts" without a number does not pass. *neg* |
+| Attempt cap | 20 | 20 | A numeric retry or attempt cap: `max_attempts: 3`, `MAX_RETRIES = 3`, `stop_after_attempt(3)`, `max 3 attempts`, `retry 2`. A "token budget of N" is not an attempt cap. "max attempts" without a number does not pass. In code, a cap counts only in a file with agent context: job, fix, agent, worker or escalate in its text, or one of those or "loop" in its path. *neg* |
 | Evidence verify | 20 | 20 | A real test command plus a fail-closed phrase |
 | Fail closed | 15 | 15 | Fail closed, exit code, must pass, or non-zero, in docs or config. Dutch: "faalt dicht", "stop bij de eerste fout" |
 | Repeated error exit | 15 | 7 | Same error, same failure, twice or stuck (each on a line that also stops, exits or escalates), in docs or config. Half until a fingerprint exists |

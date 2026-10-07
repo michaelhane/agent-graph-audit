@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 272 cases in total (one skips in a plain venv; the lab's `make test` gives 271/271 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 276 cases in total (one skips in a plain venv; the lab's `make test` gives 275/275 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 272 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 276 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 272/272
+python3 evals/run_evals.py                       # expect 276/276
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -99,6 +99,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F17 | Speed on denser filler. On 3,000 files of 200 lines of lorem ipsum the scorer took 13.0 s in the lab's `make test` (venv, Python 3.12); `report()` in-process now takes about 2.7 s under cProfile (was 13.6 s). Almost all the time was in `re` searches of whole files for patterns that start with an alternation or a lookahead (fail closed, repeated error, attempt cap, budget), which the regex engine tries at every position. Each pattern is now parsed once (`re._parser`) into a set of lowercase strings, one of which any match must contain (a literal run, a required group, every branch of an alternation, a repeat with a minimum of 1; the most selective set wins). A file whose lowercased ASCII text holds none of them is skipped with `in` before any regex runs (`may_match`, used by `best_cite`, `secret_hit` and `node_names`). It is only a necessary condition: non-ASCII files, and patterns with nothing required, take the old path, and the per-line check is unchanged. One new case: the timing case (3,000 lorem ipsum files under 10 s, with every check's pass/fail and citation pinned to the output before the fix, including matches at lines 120, 150 and 180 of one file). Only the timing part failed before the fix. 263 cases; the lab's `make test` gives 262/262 (1 skipped). Not measured on the lab host's 17.7 s field repo itself. |
 | F19 | "Join" with a group as its object no longer passes the join check: `join` followed by the/a/an/this/that/my/your and a group noun (club, community, group, team, society, association, guild, movement, crowd, ranks, cause, party, mailing list, newsletter, waitlist, waiting list, server, discord, slack, forum, channel) does not count ("Pay a membership fee to join the club."). F12's "why join", "join us" and "join our …" are unchanged, so "Join our community." already failed before the fix. By the pattern (no eval case), a group noun not in the list ("join the choir") or with an adjective between ("join the local club") still passes. Four new cases (the two fixtures from the item, and two guards that passed before the fix: "The merge step waits for both reviews to join." and "Both branches meet at a join node."); only the club case failed before the fix: 270 cases; the lab's `make test` gives 269/269 (1 skipped). |
 | F20 | A timeout on one HTTP request no longer passes the budget check: `timeout` does not count on a line with an HTTP client call (`urlopen(`, `requests.get(` and the other `requests` verbs, `httpx.…(`, `aiohttp.…(`, `fetch(`). A timeout on anything else still counts (`AGENT_TIMEOUT = 600`, `timeout-minutes: 30`, `subprocess.run(agent_cmd, timeout=600)`). Two new cases (the fixture from the item, and the guard `subprocess.run(agent_cmd, timeout=600)` in `loop.py`, which passed before the fix; the item's other guards were already pinned by the F2 cases): 268 cases; the lab's `make test` gives 267/267 (1 skipped). |
+| F21 | A cap in code counts for the attempt cap check only in a file with agent context: `agent(s)`, `job(s)`, `fix`/`fixes`/`fixed`/`fixing`, `worker(s)` or `escalate`/`escalation` as a word in the file (an `_` or non-letter around it is fine, so `escalate(job)` and `run_fix(` count), or one of those or `loop(s)` in its path (`loop.py`). A shrink-to-fit loop under `src/js/` and `MAX_ATTEMPTS = 50` in an image generator script no longer count. Docs and config are unchanged, and F15's UI-folder rule stays. This narrows decision 4 for this check: `MAX_PIPE_ATTEMPTS = 20` in code counts only next to such a word. By the pattern (no eval case), camelCase (`runJob`) is not a word match. Four new cases (the two fixtures from the item, and two guards that passed before the fix: `MAX_ATTEMPTS = 3` with `escalate(job)` in `loop.py`, and `MAX_RETRIES = 3` in `src/runner.py` that runs `run_fix(job, …)`): 274 cases; the lab's `make test` gives 273/273 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -239,7 +240,7 @@ Found in the field check after F13: "budget" passes on `resp = urllib.request.ur
 - Fixture: `README.md` with a code block holding `resp = urllib.request.urlopen(req, timeout=10)`. Expected: budget fails.
 - Guard: `loop.py` with `AGENT_TIMEOUT = 600` and a workflow with `timeout-minutes: 30` still pass.
 
-### F21. Attempt cap: UI code outside the known folders, and non-agent retry caps
+### F21. Attempt cap: UI code outside the known folders, and non-agent retry caps: done (see section 4)
 Found in the field check after F15: F15 skips UI code by folder name (`site/`, `web/`, …), so the same shrink-to-fit loop under `src/js/compositor-renderer.js` still passes "attempt cap". Next in line is `MAX_ATTEMPTS = 50` capping retries in an image generator script, also not a cap on an agent's fix attempts.
 - Fixture: `src/js/render.js` with `while (tooTall() && attempts < 12) { attempts++; }`. Expected: attempt cap fails. Also `scripts/generate.py` with `MAX_ATTEMPTS = 50` and `while made < n and attempts < MAX_ATTEMPTS:` and no job, fix or agent on those lines.
 - Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
@@ -253,6 +254,11 @@ Found in the field check after F18: "conditional edges" passes on a design-doc t
 Found in the field check after F20: "budget" passes on `await page.goto('{url}', { waitUntil: 'domcontentloaded', timeout: 15000 });` in a plan's code snippet, through `(?<![a-z])timeout`. F20 covers HTTP calls, not Playwright/Puppeteer navigation or waits.
 - Fixture: `README.md` with a code block holding `await page.goto(url, { timeout: 15000 });`. Expected: budget fails. Also `await page.waitForSelector('#x', { timeout: 5000 });`.
 - Guard: `loop.py` with `AGENT_TIMEOUT = 600` still passes.
+
+### F24. Attempt cap: the agent-word test is file-wide
+Found in the field check after F21: an image generator script still passes "attempt cap" on `MAX_ATTEMPTS = 50`, because the agent-word test looks at the whole file and its docstring says "Zone approach: fixed hierarchy at top" ("fixed" as in not variable). The word has to be near the cap, not anywhere in the file.
+- Fixture: `scripts/generate.py` with a docstring "Fixed layout at the top." and, 30 lines later, `MAX_ATTEMPTS = 50` and `while made < n and attempts < MAX_ATTEMPTS:`. Expected: attempt cap fails.
+- Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
 
 ### Known limits (accepted for now, documented in README)
 
