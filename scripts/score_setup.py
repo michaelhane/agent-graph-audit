@@ -129,9 +129,10 @@ NEGATED_AFTER_RE = re.compile(
     re.I,
 )
 CLAUSE_BREAK_RE = re.compile(r"[.;:!?,]")
-# pytest followed by a version specifier or extras is a dependency line, not a command.
+# pytest followed by a version specifier or extras is a dependency line, not a command,
+# and .pytest_cache is a folder name.
 VERIFY_CMD_RE = re.compile(
-    r"(npm test|pytest(?!\s*[<>=!~\[])|go test|cargo test|pnpm test|yarn test|make test"
+    r"(npm test|\bpytest\b(?!\s*[<>=!~\[])|go test|cargo test|pnpm test|yarn test|make test"
     r"|npm run (?:lint|typecheck|test)\b)",
     re.I,
 )
@@ -312,21 +313,58 @@ def read_files(root: Path, skipped: list[str] | None = None) -> list[tuple[str, 
     return files
 
 
+INSTRUCTION_NAMES = {"AGENTS.md", "CLAUDE.md"}
+# A make target or .PHONY line: `.PHONY: test status`, `test: build`. Not `CC := gcc`.
+MAKE_TARGET_RE = re.compile(r"^[^\s#=:][^=:]*::?(?!=)")
+
+
+def file_rank(name: str) -> int:
+    """Which file to cite first when several match: state, config, instruction files, docs, code."""
+    path = Path(name)
+    if path.name in STATE_NAMES:
+        return 0
+    if path.name in INSTRUCTION_NAMES:
+        return 2
+    return {"config": 1, "doc": 3, "code": 4}[file_kind(name)]
+
+
+def weak_line(name: str, line: str) -> bool:
+    """A comment, an ignore-file line or a make target: cited only when no better line matches."""
+    path = Path(name)
+    if path.name == ".gitignore":
+        return True
+    stripped = line.lstrip()
+    if file_kind(name) == "doc":
+        return stripped.startswith("<!--")  # a Markdown "#" is a heading, not a comment
+    if stripped.startswith(("#", "//")):
+        return True
+    return path.name == "Makefile" and MAKE_TARGET_RE.match(line) is not None
+
+
+def best_cite(files: list[tuple[str, list[str]]], patterns: list[str], hit) -> str | None:
+    """The best line where hit(compiled pattern, line) is true.
+
+    Files are tried in file_rank order, so the first strong line is the best one. A weak
+    line is kept as a fallback and cited only if no strong line matches anywhere.
+    """
+    regs = [re.compile(p, re.I) for p in patterns]
+    fallback = None
+    for name, lines in sorted(files, key=lambda f: file_rank(f[0])):
+        for cre in regs:
+            for i, line in enumerate(lines, start=1):
+                if hit(cre, line):
+                    if not weak_line(name, line):
+                        return f"{name}:{i}"
+                    fallback = fallback or f"{name}:{i}"
+    return fallback
+
+
 def cite(files: list[tuple[str, list[str]]], pattern: str) -> str | None:
-    cre = re.compile(pattern, re.I)
-    for name, lines in files:
-        for i, line in enumerate(lines, start=1):
-            if cre.search(line):
-                return f"{name}:{i}"
-    return None
+    return cite_any(files, [pattern])
 
 
 def cite_any(files: list[tuple[str, list[str]]], patterns: list[str]) -> str | None:
-    for pattern in patterns:
-        found = cite(files, pattern)
-        if found:
-            return found
-    return None
+    return best_cite(files, patterns, lambda cre, line: cre.search(line) is not None)
 
 
 def file_kind(name: str) -> str:
@@ -364,19 +402,19 @@ def cite_affirmed(
     files: list[tuple[str, list[str]]], patterns: list[str], shared_words: bool = False
 ) -> str | None:
     """Like cite_any, but a negated mention is not evidence. Keeps looking for one that isn't."""
-    for pattern in patterns:
-        cre = re.compile(pattern, re.I)
-        for name, lines in files:
-            for i, line in enumerate(lines, start=1):
-                for m in cre.finditer(line):
-                    if not negated(line, m.start(), m.end(), shared_words):
-                        return f"{name}:{i}"
-    return None
+    return best_cite(
+        files,
+        patterns,
+        lambda cre, line: any(not negated(line, m.start(), m.end(), shared_words) for m in cre.finditer(line)),
+    )
 
 
 def verify_files(files: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
-    """Files that may hold a verify command: requirements files only list dependencies."""
-    return [f for f in files if not re.match(r"requirements.*\.txt$", Path(f[0]).name, re.I)]
+    """Files that may hold a verify command: requirements files only list dependencies, .gitignore only paths."""
+    return [
+        f for f in files
+        if not re.match(r"requirements.*\.txt$", Path(f[0]).name, re.I) and Path(f[0]).name != ".gitignore"
+    ]
 
 
 # A non-empty allow or deny list in Claude Code settings is a tool boundary.
@@ -411,15 +449,16 @@ def gitignore_env_cite(files: list[tuple[str, list[str]]]) -> str | None:
 
 
 def instruction_cite(files: list[tuple[str, list[str]]]) -> str | None:
-    found = cite(files, r"definition of done")
+    """CLAUDE.md/AGENTS.md first (its definition of done, else its first line), then a definition of done elsewhere."""
+    instructions = [f for f in files if re.search(r"(AGENTS|CLAUDE)\.md$", f[0])]
+    found = cite(instructions, r"definition of done")
     if found:
         return found
-    for name, lines in files:
-        if re.search(r"(AGENTS|CLAUDE)\.md$", name):
-            for i, line in enumerate(lines, start=1):
-                if line.strip():
-                    return f"{name}:{i}"  # an empty file is not an instruction file
-    return None
+    for name, lines in instructions:
+        for i, line in enumerate(lines, start=1):
+            if line.strip():
+                return f"{name}:{i}"  # an empty file is not an instruction file
+    return cite(files, r"definition of done")
 
 
 def score_checks(checks: list[tuple[str, int, bool, str, str | None, int | None]]) -> dict:

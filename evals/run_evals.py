@@ -371,6 +371,13 @@ CASES = [
      {".gitignore": ".claude/\n", ".claude/settings.json": '{"permissions": {"allow": ["Read"]}}',
       ".claude/notes.md": "human gate\n"},
      {"fail:human gate": True}),
+
+    # The weakest hit was cited (field-test item F3). An ignore line is not a verify command.
+    ("cite: .pytest_cache/ in .gitignore is not a verify command", {".gitignore": ".pytest_cache/\n"},
+     {"fail:verify command": True, "fail:evidence verify": True}),
+    # Guard: a comment is still evidence when nothing better matches.
+    ("cite: a comment alone still counts", {"Makefile": "# each job gets its own worktree\n"},
+     {"pass:work isolation": True, "pass:isolated workspace": True}),
 ]
 
 
@@ -707,6 +714,36 @@ def ignored_claude_settings(tmp: Path) -> list[str]:
     return errors
 
 
+ISOLATION_RULE = "The fix node makes a fresh worktree per attempt.\n"
+
+
+def best_line_cited(tmp: Path) -> list[str]:
+    """Of several matching lines, the citation prefers state and config, then instruction files,
+    then docs, and never a comment, an ignore line or a make target when a better line exists (item F3)."""
+    cases = [
+        ("verify command", {".gitignore": ".pytest_cache/\n", "CLAUDE.md": "Run pytest before you finish.\n"},
+         "CLAUDE.md:1"),
+        ("instruction file", {"PLAN.md": "Definition of done: the evals pass.\n", "CLAUDE.md": "Be careful.\n"},
+         "CLAUDE.md:1"),
+        ("external state", {"Makefile": ".PHONY: test score status\n",
+                            "state/jobs.json": '[{"job_id": "j1", "status": "passed", "attempt": 1}]\n'},
+         "state/jobs.json:1"),
+        ("work isolation", {"Makefile": "# clean up the worktree folder\n", "README.md": ISOLATION_RULE},
+         "README.md:1"),
+        ("isolated workspace", {"Makefile": "# clean up the worktree folder\n", "README.md": ISOLATION_RULE},
+         "README.md:1"),
+        # Guard: a comment in a config file loses to a doc sentence, though config ranks above docs.
+        ("work isolation", {"config/loop.yml": "# the old worktree layout\n", "README.md": ISOLATION_RULE},
+         "README.md:1"),
+    ]
+    errors = []
+    for n, (check, files, want) in enumerate(cases):
+        got = citation_of(tmp / f"c{n}", files, check)
+        if got != want:
+            errors.append(f"{check}: citation {got!r}, want {want!r}")
+    return errors
+
+
 SPECIAL = [
     *(repo_under(d) for d in ("artifacts", "build", "dist", "venv", "node_modules")),
     installed_skill("core files", ".claude/skills/agent-graph-audit", only_core=True),
@@ -726,6 +763,7 @@ SPECIAL = [
     ("instruction file cites a line that exists", empty_instruction_citation),
     ("gitignored and worktree copies are not scanned", out_of_scope_files),
     ("gitignored .claude/settings.json is read and cited", ignored_claude_settings),
+    ("the best matching line is cited", best_line_cited),
 ]
 
 
