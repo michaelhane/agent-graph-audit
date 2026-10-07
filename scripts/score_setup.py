@@ -759,12 +759,28 @@ BOUND_CODE_RE = r"\brecursion_limit\b[^\n\d]{0,20}?\d|\bmax_(?:attempts|retries|
 # "edge cases", "cutting edge" and friends are not graph edges.
 EDGE_WORD_RE = (
     r"(?<!cutting )(?<!leading )(?<!bleeding )(?<!microsoft )"
-    r"\bedges?\b(?![\s-]*cases?\b)(?!\s+computing)"
+    r"\bedges?\b(?![\s-]*cases?\b)(?!\s+computing)(?!-\w)"
+)
+# An edge is conditional only with a condition on the same line (item F2):
+# "3397 edges" or "Edge-cache is on" is not one.
+EDGE_CONDITION_RE = re.compile(
+    r"\b(?:if|when|unless|else|otherwise|conditional(?:ly)?|conditions?|depending|based on|rout(?:e|es|ed|ing))\b"
+    r"|\bon\s+(?:pass|fail|failure|success|error|reject(?:ion)?|approval)\b|==",
+    re.I,
 )
 # A workflow job that needs two or more jobs waits for both: a join.
 JOIN_CONFIG_RE = r"\bneeds:\s*\[[^\]]*,"
 # In config and code, only an outcome value counts, not the verb: "ignored", wontfix, not_fixable.
 IGNORE_VALUE_RE = r"""["']ignored["']|\bwontfix\b|\bnot[_ -]fixable\b"""
+
+
+def cite_cond_edge(files: list[tuple[str, list[str]]]) -> str | None:
+    """Like cite_affirmed, but the word edge counts only on a line with a condition (item F2)."""
+    def hit(cre, line):
+        if cre.pattern == EDGE_WORD_RE and not EDGE_CONDITION_RE.search(line):
+            return False
+        return any(not negated(line, m.start(), m.end()) for m in cre.finditer(line))
+    return best_cite(files, [r"tests passed", EDGE_WORD_RE, r"status =="], hit)
 
 
 def node_names(files: list[tuple[str, list[str]]]) -> tuple[set[str], str | None]:
@@ -817,7 +833,7 @@ def graph_checks(files: list[tuple[str, list[str]]]) -> dict:
     docs = of_kind(files, "doc")
     config = of_kind(files, "config")
     code = of_kind(files, "code")
-    edges = cite_affirmed(prose, [r"tests passed", EDGE_WORD_RE, r"status =="]) or cite(code, COND_EDGE_CODE_RE)
+    edges = cite_cond_edge(prose) or cite(code, COND_EDGE_CODE_RE)
     ignore = cite_affirmed(docs, [r"\bignore\b", r"wontfix", r"won't fix", r"not fixable"]) or cite_any(
         config + code, [IGNORE_VALUE_RE]
     )
