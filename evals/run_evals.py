@@ -574,6 +574,15 @@ CASES = [
      {"pass:repeated error exit": True}),
     ("f14 ok: stuck job is parked", {"README.md": "A job that stays stuck is parked for a human.\n"},
      {"pass:repeated error exit": True}),
+    # English parity for "stop bij de eerste fout" (decision 8, item F16).
+    ("f16: stop at the first error is fail closed", {"CLAUDE.md": "Stop at the first error.\n"},
+     {"pass:fail closed": True}),
+    ("f16: stops on the first failure is fail closed",
+     {"README.md": "The pipeline stops on the first failure.\n"},
+     {"pass:fail closed": True}),
+    # Guard: "first error" without a stop rule does not count.
+    ("f16 ok: first error was a typo", {"README.md": "The first error was a typo.\n"},
+     {"fail:fail closed": True}),
 ]
 
 

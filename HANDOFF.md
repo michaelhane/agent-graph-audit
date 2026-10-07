@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 257 cases in total (one skips in a plain venv; the lab's `make test` gives 256/256 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 260 cases in total (one skips in a plain venv; the lab's `make test` gives 259/259 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 257 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 260 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 257/257
+python3 evals/run_evals.py                       # expect 260/260
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -93,6 +93,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F12 | "Join" as becoming a member no longer passes the join check: `join` directly after "why" ("Why join when there's no content?", "why join?") or directly before "us"/"our" ("Join our mailing list") does not count. "Wait for", "partial diff", a join node and "both reviews … to join" still count. By the pattern (no eval case), other membership phrasings ("join the community") still pass. Four new cases (the fixture from the item, a quoted "why join?", "Join our mailing list for updates.", and the guard "The merge step waits for both reviews to join.", which passed before the fix): 244 cases; the lab's `make test` gives 243/243 (1 skipped). |
 | F13 | A bare "budget" no longer passes the budget check. It needs an amount ("budget of 30 turns", "budget: 5", "$5 budget", "5 USD budget"), a run scope ("budget per run/job/attempt/turn/task/agent") or a run noun before it (run, job, turn, cost, time, step, spend, usd, dollar, compute, attempt budget). "The user's cognitive budget is finite." and a `budget` form field no longer count. Timeout, token budget, max minutes and spend cap are unchanged. Five new cases (the two fixtures from the item, and three guards that passed before the fix: "Each run has a budget of 30 turns.", "Each run has a $5 budget." and "… its budget per run is spent."): 250 cases; the lab's `make test` gives 249/249 (1 skipped). By the pattern (no eval case), `BUDGET_USD = 5` and `max_budget` never matched `\bbudget\b` and still do not count. |
 | F14 | `stuck` passes the repeated error exit check only on a line that also stops or hands off, with the same words as `twice` (stop, exit, halt, abort, end(s), escalate, give up, park or blocked), from one shared pattern: "If they're stuck, give a nudge." no longer counts. "Same error", "same failure" and the `twice` rule are unchanged. Three new cases (the fixture from the item, and two guards that passed before the fix: "When a job is stuck on the same error twice, stop and escalate." and "A job that stays stuck is parked for a human.", the second one with no other keyword): 252 cases; the lab's `make test` gives 251/251 (1 skipped). |
+| F16 | English parity for "stop bij de eerste fout" (decision 8): fail closed also accepts "stop/stops/stopping at/on the first error/failure" ("Stop at the first error.", "The pipeline stops on the first failure."). "First error" without a stop rule still fails. Three new cases (the fixture from the item in `CLAUDE.md`, the "stops on the first failure" form, and the guard "The first error was a typo.", which passed before the fix): 260 cases; the lab's `make test` gives 259/259 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -209,7 +210,7 @@ Found in the field check after F2 attempt cap: a site renderer passes "attempt c
 - Fixture: `site/js/render.js` with `var attempts = 0;` and `while (tooTall() && attempts < 12) { attempts++; }`. Expected: attempt cap fails.
 - Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
 
-### F16. English parity for "stop at the first error" (decision 8)
+### F16. English parity for "stop at the first error" (decision 8): done (see section 4)
 Found in the field check after F4: a `CLAUDE.md` now passes "fail closed" on the Dutch rule "Stop bij de eerste fout — analyseer, fix, verifieer voordat je doorgaat." The English rule "Stop at the first error." does not pass, although decision 8 says Dutch counts the same as English.
 - Fixture: `CLAUDE.md` "Stop at the first error." Expected: fail closed passes, like the Dutch line.
 - Guard: `README.md` "The first error was a typo." still fails.

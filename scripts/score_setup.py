@@ -145,10 +145,12 @@ VERIFY_CMD_RE = re.compile(
 )
 # non-zero counts only on a line about an exit or status ("exits non-zero",
 # "a non-zero status stops the job"), not as a number ("a non-zero count").
-# Dutch counts the same (decision 8): "faalt dicht", "stop bij de eerste fout".
+# Dutch counts the same (decision 8): "faalt dicht", "stop bij de eerste fout",
+# and its English form "stop at/on the first error/failure".
 NONZERO_CONTEXT = r"\b(?:exit(?:s|ed|ing)?|return(?:s|ed|ing)?|status|code|fail(?:s|ed|ing|ure)?|abort(?:s|ed)?|stop(?:s|ped)?)\b"
 FAIL_CLOSED_RE = re.compile(
     rf"(fail closed|exit code|must pass|{NONZERO_CONTEXT}.*non-zero|non-zero.*{NONZERO_CONTEXT}"
+    r"|\bstop(?:s|ping)? (?:at|on) the first (?:error|failure)\b"
     r"|\bfaalt dicht\b|\bstop(?:t|pen)? bij de eerste fout\b)",
     re.I,
 )
