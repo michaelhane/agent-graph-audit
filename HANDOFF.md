@@ -169,6 +169,7 @@ Found in the same field check: "claim" passes on a blog post's "photos of the to
 Found in the field check after F2 conditional edges: "conditional edges" passes on `if resp.status == 200:` in a Python snippet inside a `.claude/commands/*.md`, through the `status ==` pattern in `cite_cond_edge`, which does not need the word edge.
 - Fixture: `README.md` with a code block holding `if resp.status == 200:`. Expected: conditional edges fails.
 - Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
+- Also seen in the field check of this PR on two more repos: a count of graph edges next to a condition word still passes ("`Rebuilt: 290 nodes, 294 edges` … when the hook fired"). And `assert status == 401` inside a code block in a plan doc passes through the `status ==` pattern. Fixtures: a README line "Rebuilt: 290 nodes, 294 edges when the hook fired." and a fenced block in a `.md` with `assert status == 401`. Expected: conditional edges fails for both. A number directly before "edges" never counts.
 
 ### Known limits (accepted for now, documented in README)
 
