@@ -1089,6 +1089,15 @@ EDGE_CONDITION_RE = re.compile(
     r"|\bon\s+(?:pass|fail|failure|success|error|reject(?:ion)?|approval)\b|==",
     re.I,
 )
+# A route verb is a conditional edge without the word edge only with a condition word and
+# a node name on the same line (item F27): "When the review fails, the graph routes back
+# to fix." counts; "Traffic routes through the CDN when the origin fails." names no step.
+ROUTE_VERB_RE = r"\brout(?:e|es|ed|ing)\b"
+ROUTE_CONDITION_RE = re.compile(
+    r"\b(?:if|when|unless|else|otherwise|depending|based on)\b"
+    r"|\bon\s+(?:pass|fail|failure|success|error|reject(?:ion)?|approval)\b",
+    re.I,
+)
 # A workflow job that needs two or more jobs waits for both: a join.
 JOIN_CONFIG_RE = r"\bneeds:\s*\[[^\]]*,"
 # In config and code, only an outcome value counts, not the verb: "ignored", wontfix, not_fixable.
@@ -1117,8 +1126,11 @@ def cite_cond_edge(files: list[tuple[str, list[str]]]) -> str | None:
         if cre.pattern == STATUS_ROUTE_RE and not (
                 STATUS_ROUTE_CONTEXT_RE.search(line) or STATUS_ROUTE_CONTEXT_RE.search(nxt)):
             return False
+        if cre.pattern == ROUTE_VERB_RE and not (
+                ROUTE_CONDITION_RE.search(line) and NODE_NAME_RE.search(line)):
+            return False
         return any(not negated(line, m.start(), m.end()) for m in cre.finditer(line))
-    return best_cite(files, [r"tests passed", EDGE_WORD_RE, STATUS_ROUTE_RE], hit, with_next=True)
+    return best_cite(files, [r"tests passed", EDGE_WORD_RE, STATUS_ROUTE_RE, ROUTE_VERB_RE], hit, with_next=True)
 
 
 def node_names(files: list[tuple[str, list[str]]]) -> tuple[set[str], str | None]:

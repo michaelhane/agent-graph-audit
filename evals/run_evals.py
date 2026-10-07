@@ -699,6 +699,14 @@ CASES = [
     ("f26 ok: each run has a timeout",
      {"README.md": "Each run has a timeout of 10 minutes.\n"},
      {"pass:budget": True}),
+    # A conditional route between two steps counts without the word edge (item F27).
+    ("f27: routing prose with a condition and node names",
+     {"README.md": "When the review fails, the graph routes back to fix.\n"},
+     {"pass:conditional edges": True}),
+    # Guard: a route with a condition but no step or node is not a graph edge.
+    ("f27 ok: CDN routing is not a conditional edge",
+     {"README.md": "Traffic routes through the CDN when the origin fails.\n"},
+     {"fail:conditional edges": True}),
 ]
 
 
