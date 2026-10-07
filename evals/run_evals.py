@@ -378,6 +378,17 @@ CASES = [
     # Guard: a comment is still evidence when nothing better matches.
     ("cite: a comment alone still counts", {"Makefile": "# each job gets its own worktree\n"},
      {"pass:work isolation": True, "pass:isolated workspace": True}),
+
+    # A test script run directly is a verify command (field-test item F3c).
+    ("verify: python test script", {"CLAUDE.md": "Tests: `python tests/test_gate.py`\n"},
+     {"pass:verify command": True}),
+    ("verify: node test script", {"CLAUDE.md": "Tests: `node tests/x.test.js`\n"},
+     {"pass:verify command": True}),
+    ("verify: bash test script", {"CLAUDE.md": "Tests: `bash tests/run.sh`\n"},
+     {"pass:verify command": True}),
+    # Guard: an intention to test is not a command.
+    ("verify: tests some day is not a command", {"CLAUDE.md": "We should add tests some day.\n"},
+     {"fail:verify command": True}),
 ]
 
 
