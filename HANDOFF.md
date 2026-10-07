@@ -287,7 +287,9 @@ Found with a synthetic probe during the F26 field check, not in a field repo: "E
 - Fixture: `README.md` "Each agent run times out after 10 minutes." Expected: budget passes.
 - Guard: `README.md` "Screenshots sometimes time out." still fails.
 
-### F29. "non-goal is auto-merge" voids the human gate (false fail)
+### F29. "non-goal is auto-merge" voids the human gate: by design (decision 3), not a bug
+Kept as is by Micha (2026-10-07): decision 3 says auto-merge in any sense fails the gate and only "no "/"no-" negates, and decision 9 keeps that for config gates. The lab escalated this item for that reason; it is closed without a fix. A repo that hits it rewords the sentence (e.g. "merging records automatically is out of scope").
+
 Found when scoring a private repo with a real review gate (a `.claude/review-gate.json` with `"mode": "ask"` and a merge script that needs a review per money file): "human gate" fails on one sentence in a review note, "(PRD non-goal is auto-merge; the hint is advisory)". The sentence says auto-merge is out of scope, and it is about merging data records, not code. The negation window does not know "non-goal", "out of scope" or "not a goal".
 - Fixture: `.claude/review-gate.json` with `{"mode": "ask"}` plus `docs/review.md` "PRD non-goal is auto-merge; the hint is advisory." Expected: human gate passes.
 - Guard: the same gate config plus `README.md` "PRs auto-merge when CI is green." still fails.
