@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 237 cases in total (one skips in a plain venv; the lab's `make test` gives 236/236 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 245 cases in total (one skips in a plain venv; the lab's `make test` gives 244/244 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 237 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 245 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 237/237
+python3 evals/run_evals.py                       # expect 245/245
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -89,6 +89,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F6 | Dutch key names (decision 8). The secret check also takes `api_sleutel` (`api-sleutel`, `apisleutel`), `wachtwoord` and `geheim` as key words, from one shared `SECRET_WORDS` pattern that both the key regex and the F8 file prefilter use. The rules of decision 7 are unchanged: a quoted literal counts anywhere, an unquoted value only in env files, and the citation is `file:line`, never the value. So that the new key words don't flag Dutch placeholders, `jouw_…`/`jouw-…` and `…_hier`/`…-hier` count as placeholders, like `your_…` and `…_here`. `geheime…` is not `geheim` (a letter after the key word still cancels it). Nine new cases (three fixtures: `wachtwoord: "…"` in Markdown, `api_sleutel` in JSON, `APP_GEHEIM=` in `.env`; five guards: a Dutch placeholder, a path, an env-var name, an unquoted value in prose, and `geheimeTaal`; and a check that the Markdown case cites `README.md:3` and the value appears in neither the JSON nor the Markdown report): 235 cases; the lab's `make test` gives 234/234 (1 skipped). |
 | F9 | "Claim" as a verb about a statement no longer passes the claim check: `claim`/`claimed` directly followed by a subject pronoun (they, he, she, we, I, you), optionally after "that", or by "to be"/"to have" does not count ("Nobody can claim they created it first."). "Claim a job", "claim it" and "claimed by one worker" still count. By the pattern (no eval case), "claims"/"claiming" never matched the claim check, and "claim that X" with a noun subject ("claim that the cache is fresh") still passes. Two new cases (the fixture from the item, and the guard "Each job is claimed by one worker."; the guard passed before the fix): 228 cases; the lab's `make test` gives 227/227 (1 skipped). |
 | F10 | "In progress" in plain prose no longer passes the claim check: it counts only as a quoted value (`"in progress"`, `'in progress'`, `` `in progress` ``) or on a line that also says status, state, mark(s/ed), set(s), move(s/d) or flag(s/ged) ("Photos of the build in progress." no longer counts). Claim, lock file and already taken are unchanged. Three new cases (the fixture from the item, and two guards that passed before the fix: `"status": "in progress"` in `jobs.json`, and "A worker marks the job in progress before it starts."): 240 cases; the lab's `make test` gives 239/239 (1 skipped). |
+| F11 | `status ==` passes the conditional edges check only when the value is not a number: `status ==` followed by a digit is an HTTP or exit-code check (`if resp.status == 200:`, `assert status == 401`), not a route. "If status == failed, go back to fix." still counts. A number directly before "edge(s)" is a count and never counts, even next to a condition word ("Rebuilt: 290 nodes, 294 edges when the hook fired."). Five new cases (the three fixtures from the item, and two guards: "If status == failed, the edge goes back to fix." and the same line without the word edge still pass; both guards passed before the fix): 242 cases; the lab's `make test` gives 241/241 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -179,7 +180,7 @@ Found in the same field check: "claim" passes on a blog post's "photos of the to
 - Fixture: `README.md` "Photos of the build in progress." Expected: claim fails.
 - Guard: a state file `jobs.json` with `"status": "in progress"` still passes.
 
-### F11. "status ==" from an HTTP check counts as a conditional edge
+### F11. "status ==" from an HTTP check counts as a conditional edge: done (see section 4)
 Found in the field check after F2 conditional edges: "conditional edges" passes on `if resp.status == 200:` in a Python snippet inside a `.claude/commands/*.md`, through the `status ==` pattern in `cite_cond_edge`, which does not need the word edge.
 - Fixture: `README.md` with a code block holding `if resp.status == 200:`. Expected: conditional edges fails.
 - Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
@@ -213,6 +214,11 @@ Found in the field check after F4: a `CLAUDE.md` now passes "fail closed" on the
 ### F17. Speed target on denser filler
 Found in the field check after F8: on a synthetic repo of 3,000 committed files of 200 lines of lorem ipsum, the scorer took 95.8 s before F8 and 17.7 s after it (same output) on the lab host. That is the same 5x gain F8 reports, but above the 10 s target. F8's 6 s was measured on its own fixture.
 - Fixture: a timing script that builds that repo and runs the scorer once. Expected: under 10 s on the lab host, output unchanged.
+
+### F18. A "=== Status ===" banner counts as a conditional edge
+Found in the field check after F11: "conditional edges" passes on `print('=== Review Status ===\n')` in a plan doc. F11's `status ==(?!\s*\d)` matches "Status ===" because the next character is `=`, not a digit.
+- Fixture: `README.md` with a code block holding `print('=== Review Status ===')`. Expected: conditional edges fails.
+- Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
 
 ### Known limits (accepted for now, documented in README)
 

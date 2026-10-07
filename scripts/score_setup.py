@@ -882,10 +882,14 @@ BOUND_CODE_RE = r"\brecursion_limit\b[^\n\d]{0,20}?\d|\bmax_(?:attempts|retries|
 # "edge cases", "cutting edge" and friends are not graph edges.
 EDGE_WORD_RE = (
     r"(?<!cutting )(?<!leading )(?<!bleeding )(?<!microsoft )"
-    r"\bedges?\b(?![\s-]*cases?\b)(?!\s+computing)(?!-\w)"
+    r"(?<!\d )(?<!\d)\bedges?\b(?![\s-]*cases?\b)(?!\s+computing)(?!-\w)"
 )
+# A status compared with a number is an HTTP or exit-code check, not a route (item F11):
+# "resp.status == 200", "assert status == 401". "status == failed" still counts.
+STATUS_ROUTE_RE = r"status ==(?!\s*\d)"
 # An edge is conditional only with a condition on the same line (item F2):
-# "3397 edges" or "Edge-cache is on" is not one.
+# "3397 edges" or "Edge-cache is on" is not one. A number right before "edges" is a
+# count and never counts, even next to a condition word (item F11).
 EDGE_CONDITION_RE = re.compile(
     r"\b(?:if|when|unless|else|otherwise|conditional(?:ly)?|conditions?|depending|based on|rout(?:e|es|ed|ing))\b"
     r"|\bon\s+(?:pass|fail|failure|success|error|reject(?:ion)?|approval)\b|==",
@@ -917,7 +921,7 @@ def cite_cond_edge(files: list[tuple[str, list[str]]]) -> str | None:
         if cre.pattern == EDGE_WORD_RE and not EDGE_CONDITION_RE.search(line):
             return False
         return any(not negated(line, m.start(), m.end()) for m in cre.finditer(line))
-    return best_cite(files, [r"tests passed", EDGE_WORD_RE, r"status =="], hit)
+    return best_cite(files, [r"tests passed", EDGE_WORD_RE, STATUS_ROUTE_RE], hit)
 
 
 def node_names(files: list[tuple[str, list[str]]]) -> tuple[set[str], str | None]:

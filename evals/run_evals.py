@@ -410,6 +410,23 @@ CASES = [
      {"pass:conditional edges": True}),
     ("f2 ok: edges routed by status", {"README.md": "Edges from review are routed by the job status.\n"},
      {"pass:conditional edges": True}),
+    # An HTTP status check or a counted edge is not a conditional edge (field-test item F11).
+    ("f11: http status check is not a conditional edge",
+     {"README.md": "Example:\n\n```python\nif resp.status == 200:\n    print('ok')\n```\n"},
+     {"fail:conditional edges": True}),
+    ("f11: assert status code is not a conditional edge",
+     {"docs/plan.md": "# Plan\n\n```python\nassert status == 401\n```\n"},
+     {"fail:conditional edges": True}),
+    ("f11: a count of edges next to a condition word",
+     {"README.md": "Rebuilt: 290 nodes, 294 edges when the hook fired.\n"},
+     {"fail:conditional edges": True}),
+    # Guards: a status routed to a node still counts.
+    ("f11 ok: status == failed routes back to fix",
+     {"README.md": "If status == failed, the edge goes back to fix.\n"},
+     {"pass:conditional edges": True}),
+    ("f11 ok: status == failed without the word edge",
+     {"README.md": "If status == failed, go back to fix.\n"},
+     {"pass:conditional edges": True}),
     # A command or flag named ignore is not an ignore outcome (field-test item F2, ignore outcome).
     ("f2: git check-ignore is not an outcome", {"README.md": "Run `git check-ignore`.\n"},
      {"fail:ignore outcome": True}),
