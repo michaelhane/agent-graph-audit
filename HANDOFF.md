@@ -96,6 +96,11 @@ Field-test round 1 (2026-10-06): 6 real repos, every citation checked by hand. O
   - State files (`state.json`, `jobs.json`, `state.jsonl`, `jobs.jsonl`) are still read when `.gitignore` lists them. Real loops often ignore their state folder. Fixture: `.gitignore` with `state/` and a valid `state/state.json`. Expected: `running: true`.
   - A `.env*` file that `.gitignore` ignores does not fail "no inline secrets": an ignored env file is the right place for a key. A `.env` that is not ignored is still read and still fails. Fixtures: `.gitignore` with `.env` plus `.env` holding `API_KEY=` and a 20-character value: passes. The same `.env` without that `.gitignore` line: fails.
 
+### F1b. Ignored Claude settings still count
+Found in a field test after F1: a repo whose `.gitignore` lists `.claude/` lost "tool boundary", because `.claude/settings.json` (a real `permissions.allow` list Claude reads on that machine) is no longer read. Decision (Micha, 2026-10-07): `.claude/settings.json` and `.claude/settings.local.json` are read even when `.gitignore` ignores them, like state files. Nothing else under an ignored `.claude/` is read, and `.claude/worktrees/` stays skipped.
+- Fixture: `.gitignore` with `.claude/`, plus `.claude/settings.json` holding `{"permissions": {"allow": ["Read"]}}`. Expected: tool boundary passes and cites `.claude/settings.json`.
+- Guard: the same repo with `.claude/notes.md` containing "human gate". Expected: human gate is not cited from `.claude/notes.md`.
+
 ### F3. The weakest hit is cited
 - `.gitignore` containing `.pytest_cache/` passes "verify command" and "evidence verify", even when `pytest` sits in `CLAUDE.md`. Fixture: a `.gitignore` with only `.pytest_cache/`. Expected: verify command fails.
 - "Instruction file" cites a plan doc while `CLAUDE.md` exists. Expected: the citation prefers `CLAUDE.md`/`AGENTS.md`.
