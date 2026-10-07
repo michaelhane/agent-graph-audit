@@ -178,6 +178,11 @@ Found in the field check after F2 join: two repos still pass "join" on prose lik
 - Fixture: `README.md` "Why join when there's no content?" Expected: join fails.
 - Guard: `README.md` "The merge step waits for both reviews to join." still passes.
 
+### F13. "budget" with another meaning
+Found in the field check after F2 budget: two repos still pass "budget" through bare `\bbudget\b`, on "The user's cognitive budget is finite" and on a form field list "Honeypot fields (`company_website`, `phone_number`, `budget`)". F2 budget only fixed `setTimeout`-style timeouts.
+- Fixture: `README.md` "The user's cognitive budget is finite." Expected: budget fails. Also "Honeypot fields (`phone_number`, `budget`) are rejected."
+- Guard: `README.md` "Each run has a budget of 30 turns." still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
