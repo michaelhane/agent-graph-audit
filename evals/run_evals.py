@@ -379,6 +379,12 @@ CASES = [
     ("cite: a comment alone still counts", {"Makefile": "# each job gets its own worktree\n"},
      {"pass:work isolation": True, "pass:isolated workspace": True}),
 
+    # Bare words with another meaning (field-test item F2). "A claim" as a statement is not a job claim.
+    ("f2: a testable claim is not a job claim", {"README.md": "That is a testable claim.\n"}, {"fail:claim": True}),
+    ("f2: the claim as a statement", {"README.md": "We checked the claim against the logs.\n"}, {"fail:claim": True}),
+    # Guards: claiming a job, and a claim file or lock, still count.
+    ("f2 ok: workers claim a job", {"README.md": "Workers claim a job before they start.\n"}, {"pass:claim": True}),
+    ("f2 ok: the claim file", {"README.md": "The claim file holds the job id.\n"}, {"pass:claim": True}),
     # A test script run directly is a verify command (field-test item F3c).
     ("verify: python test script", {"CLAUDE.md": "Tests: `python tests/test_gate.py`\n"},
      {"pass:verify command": True}),

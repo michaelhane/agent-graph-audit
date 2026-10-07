@@ -429,6 +429,24 @@ def cite_affirmed(
     )
 
 
+CLAIM_PATTERNS = [r"(?<!any )\bclaim(?:ed)?\b", r"in progress", r"lock file", r"already taken"]
+# "a testable claim", "the claim": claim as a statement, not a job being claimed.
+# A claim file, lock or step is still a job claim.
+CLAIM_NOUN_RE = re.compile(
+    r"\b(?:a|an|the|this|that|these|those|its|their|our|your|my|his|her)\s+(?:[\w-]+\s+)?claim\b"
+    r"(?!\s+(?:file|lock|step|node|record|marker|token)s?\b)",
+    re.I,
+)
+
+
+def cite_claim(files: list[tuple[str, list[str]]]) -> str | None:
+    """Like cite_affirmed, but claim used as a noun for a statement is not evidence (item F2)."""
+    def hit(cre, line):
+        nouns = {m.end() for m in CLAIM_NOUN_RE.finditer(line)}
+        return any(not negated(line, m.start(), m.end()) and m.end() not in nouns for m in cre.finditer(line))
+    return best_cite(files, CLAIM_PATTERNS, hit)
+
+
 def verify_files(files: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
     """Files that may hold a verify command: requirements files only list dependencies, .gitignore only paths."""
     return [
@@ -643,7 +661,7 @@ def loop_checks(files: list[tuple[str, list[str]]]) -> dict:
     command = cite_any(verify_files(files), [VERIFY_CMD_RE.pattern])
     closed = cite_any(prose, [FAIL_CLOSED_RE.pattern])
     repeated = cite_any(prose, [r"same error", r"same failure", r"\btwice\b", r"\bstuck\b"])
-    claim = cite_affirmed(prose, [r"(?<!any )\bclaim(?:ed)?\b",r"in progress", r"lock file", r"already taken"])
+    claim = cite_claim(prose)
     attempt_cap = cite_affirmed(files, [ATTEMPT_RE.pattern])
     workspace = cite_affirmed(files, [r"worktree", r"per job"], shared_words=True)
     checks = [
