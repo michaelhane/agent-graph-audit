@@ -47,7 +47,7 @@ Scores are evidence scores. A sentence in a doc counts. A diagram that is not ex
 
 | Check | Weight | Award | Passes when |
 |---|---:|---:|---|
-| Claim | 15 | 15 | Claim, in progress, lock file, or already taken, in docs or config. *neg* |
+| Claim | 15 | 15 | Claim or claimed, in progress, lock file, or already taken, in docs or config. *neg* |
 | Attempt cap | 20 | 20 | A numeric retry or attempt cap: `max_attempts: 3`, `MAX_RETRIES = 3`, `stop_after_attempt(3)`, `max 3 attempts`, `retry 2`. A "token budget of N" is not an attempt cap. "max attempts" without a number does not pass. *neg* |
 | Evidence verify | 20 | 20 | A real test command plus a fail-closed phrase |
 | Fail closed | 15 | 15 | Fail closed, exit code, must pass, or non-zero, in docs or config |
