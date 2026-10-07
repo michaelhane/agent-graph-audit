@@ -409,6 +409,14 @@ CASES = [
      {"pass:conditional edges": True}),
     ("f2 ok: edges routed by status", {"README.md": "Edges from review are routed by the job status.\n"},
      {"pass:conditional edges": True}),
+    # A command or flag named ignore is not an ignore outcome (field-test item F2, ignore outcome).
+    ("f2: git check-ignore is not an outcome", {"README.md": "Run `git check-ignore`.\n"},
+     {"fail:ignore outcome": True}),
+    ("f2: an --ignore flag is not an outcome", {"README.md": "Use `--ignore=tests/slow`.\n"},
+     {"fail:ignore outcome": True}),
+    # Guard: triage that can ignore a job still counts.
+    ("f2 ok: triage can ignore a job", {"README.md": "Triage can ignore a job that is out of scope.\n"},
+     {"pass:ignore outcome": True}),
     # A JS timer call and "time out" as a verb are not a run budget (F2 budget).
     ("f2: setTimeout in a doc is not a budget", {"README.md": "`setTimeout(fn, 100)`\n"}, {"fail:budget": True}),
     ("f2: screenshots time out is not a budget", {"README.md": "Screenshots sometimes time out.\n"},
