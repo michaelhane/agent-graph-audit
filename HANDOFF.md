@@ -287,6 +287,11 @@ Found with a synthetic probe during the F26 field check, not in a field repo: "E
 - Fixture: `README.md` "Each agent run times out after 10 minutes." Expected: budget passes.
 - Guard: `README.md` "Screenshots sometimes time out." still fails.
 
+### F29. "non-goal is auto-merge" voids the human gate (false fail)
+Found when scoring a private repo with a real review gate (a `.claude/review-gate.json` with `"mode": "ask"` and a merge script that needs a review per money file): "human gate" fails on one sentence in a review note, "(PRD non-goal is auto-merge; the hint is advisory)". The sentence says auto-merge is out of scope, and it is about merging data records, not code. The negation window does not know "non-goal", "out of scope" or "not a goal".
+- Fixture: `.claude/review-gate.json` with `{"mode": "ask"}` plus `docs/review.md` "PRD non-goal is auto-merge; the hint is advisory." Expected: human gate passes.
+- Guard: the same gate config plus `README.md` "PRs auto-merge when CI is green." still fails.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
