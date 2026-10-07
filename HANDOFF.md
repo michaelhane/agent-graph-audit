@@ -165,6 +165,11 @@ Found in the same field check: "claim" passes on a blog post's "photos of the to
 - Fixture: `README.md` "Photos of the build in progress." Expected: claim fails.
 - Guard: a state file `jobs.json` with `"status": "in progress"` still passes.
 
+### F12. "join" as becoming a member
+Found in the field check after F2 join: two repos still pass "join" on prose like "why join when there's no content?" and "a great answer to \"why join?\"". F2 join excluded method calls (`names.join(`, `os.path.join(`), not the bare verb.
+- Fixture: `README.md` "Why join when there's no content?" Expected: join fails.
+- Guard: `README.md` "The merge step waits for both reviews to join." still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
