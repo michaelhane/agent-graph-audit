@@ -465,6 +465,28 @@ CASES = [
      {"pass:fail closed": True}),
     ("f2 ok: non-zero status stops the job", {"README.md": "A non-zero status stops the job.\n"},
      {"pass:fail closed": True}),
+    # Dutch evidence counts the same as English (decision 8, item F4).
+    ("f4: zonder akkoord is a human gate", {"README.md": "Er wordt niets gemerged zonder akkoord.\n"},
+     {"pass:human gate": True}),
+    ("f4: wacht op akkoord is a human gate", {"README.md": "De merge wacht op akkoord van een mens.\n"},
+     {"pass:human gate": True}),
+    ("f4: faalt dicht is fail closed", {"README.md": "De verify-stap faalt dicht.\n"},
+     {"pass:fail closed": True}),
+    ("f4: stop bij de eerste fout is fail closed", {"README.md": "Stop bij de eerste fout.\n"},
+     {"pass:fail closed": True}),
+    ("f4: geen worktree is negated", {"README.md": "We gebruiken geen worktree.\n"},
+     {"fail:work isolation": True, "fail:isolated workspace": True}),
+    ("f4: niet in een worktree is negated", {"README.md": "Er wordt niet in een worktree gewerkt.\n"},
+     {"fail:work isolation": True, "fail:isolated workspace": True}),
+    ("f4: nooit een worktree per job is negated", {"README.md": "Er is nooit een worktree per job.\n"},
+     {"fail:work isolation": True, "fail:isolated workspace": True}),
+    ("f4: zonder timeout is negated", {"README.md": "Agents draaien zonder timeout.\n"},
+     {"fail:budget": True}),
+    # Guards: a Dutch sentence without a negator still counts, and a Dutch gate still fails on auto-merge.
+    ("f4 ok: eigen worktree per job", {"README.md": "Elke job krijgt een eigen worktree.\n"},
+     {"pass:work isolation": True, "pass:isolated workspace": True}),
+    ("f4 ok: zonder akkoord with auto-merge fails", gate_case("Niets zonder akkoord, maar Dependabot gebruikt auto-merge."),
+     {"fail:human gate": True}),
 ]
 
 

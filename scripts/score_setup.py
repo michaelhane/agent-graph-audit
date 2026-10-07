@@ -114,8 +114,10 @@ ATTEMPT_RE = re.compile(
 
 # Negation. A match is negated when one of the 4 words before it, in the same
 # clause, is a negator: "we do not use a worktree", "there is no allowlist".
+# Dutch counts the same (decision 8): "we gebruiken geen worktree".
 NEGATORS = {
     "no", "not", "never", "without", "nor", "cannot", "lack", "lacks", "lacking",
+    "niet", "geen", "nooit", "zonder",
 }
 # Isolation only: "all agents share a single worktree" is the opposite of isolation,
 # unless the clause also says per job / each job / its own.
@@ -141,9 +143,12 @@ VERIFY_CMD_RE = re.compile(
 )
 # non-zero counts only on a line about an exit or status ("exits non-zero",
 # "a non-zero status stops the job"), not as a number ("a non-zero count").
+# Dutch counts the same (decision 8): "faalt dicht", "stop bij de eerste fout".
 NONZERO_CONTEXT = r"\b(?:exit(?:s|ed|ing)?|return(?:s|ed|ing)?|status|code|fail(?:s|ed|ing|ure)?|abort(?:s|ed)?|stop(?:s|ped)?)\b"
 FAIL_CLOSED_RE = re.compile(
-    rf"(fail closed|exit code|must pass|{NONZERO_CONTEXT}.*non-zero|non-zero.*{NONZERO_CONTEXT})", re.I
+    rf"(fail closed|exit code|must pass|{NONZERO_CONTEXT}.*non-zero|non-zero.*{NONZERO_CONTEXT}"
+    r"|\bfaalt dicht\b|\bstop(?:t|pen)? bij de eerste fout\b)",
+    re.I,
 )
 # Auto-merge in any spelling: auto-merge, auto merge, automerge, allow_auto_merge,
 # platformAutomerge, enablePullRequestAutoMerge. No word boundaries around it, so
@@ -153,7 +158,11 @@ AUTO_MERGE_RE = re.compile(
     r"(?<!no )(?<!no-)auto[\s_-]?merg(?:e|ed|es|ing)|\bmerge\b.*--auto\b",
     re.I,
 )
-GATE_PHRASES = [r"human gate", r"human node", r"human merge", r"no auto-merge", r"merge stays manual"]
+# Dutch counts the same (decision 8): "zonder akkoord", "wacht op akkoord".
+GATE_PHRASES = [
+    r"human gate", r"human node", r"human merge", r"no auto-merge", r"merge stays manual",
+    r"\bzonder akkoord\b", r"\bwacht(?:t|en)? op akkoord\b",
+]
 
 CLAIM_CEILING = 69  # policy backstop, removed when evidence tiers ship
 GRAPH_SLACK = 20  # policy: graph credit cannot exceed loop + 20
