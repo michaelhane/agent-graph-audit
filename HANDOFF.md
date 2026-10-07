@@ -200,6 +200,11 @@ Found in the field check after F2 attempt cap: a site renderer passes "attempt c
 - Fixture: `site/js/render.js` with `var attempts = 0;` and `while (tooTall() && attempts < 12) { attempts++; }`. Expected: attempt cap fails.
 - Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
 
+### F16. English parity for "stop at the first error" (decision 8)
+Found in the field check after F4: a `CLAUDE.md` now passes "fail closed" on the Dutch rule "Stop bij de eerste fout — analyseer, fix, verifieer voordat je doorgaat." The English rule "Stop at the first error." does not pass, although decision 8 says Dutch counts the same as English.
+- Fixture: `CLAUDE.md` "Stop at the first error." Expected: fail closed passes, like the Dutch line.
+- Guard: `README.md` "The first error was a typo." still fails.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
