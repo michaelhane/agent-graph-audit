@@ -227,6 +227,11 @@ Found in the field check after F12: a concept doc still passes "join" on "- Pay 
 - Fixture: `README.md` "Pay a membership fee to join the club." Expected: join fails. Also "Join our community."
 - Guard: `README.md` "The merge step waits for both reviews to join." still passes.
 
+### F20. An HTTP request timeout counts as a run budget
+Found in the field check after F13: "budget" passes on `resp = urllib.request.urlopen(req, timeout=10)` in a code snippet inside a `.claude/commands/*.md`, through `(?<![a-z])timeout`. It limits one HTTP call, not an agent run.
+- Fixture: `README.md` with a code block holding `resp = urllib.request.urlopen(req, timeout=10)`. Expected: budget fails.
+- Guard: `loop.py` with `AGENT_TIMEOUT = 600` and a workflow with `timeout-minutes: 30` still pass.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
