@@ -531,8 +531,10 @@ def may_match(pattern: str, lines: list[str]) -> bool:
     return any(lit in low for lit in literals)
 
 
-def best_cite(files: list[tuple[str, list[str]]], patterns: list[str], hit) -> str | None:
+def best_cite(files: list[tuple[str, list[str]]], patterns: list[str], hit, with_next: bool = False) -> str | None:
     """The best line where hit(compiled pattern, line) is true.
+
+    With with_next, hit also gets the next line ("" after the last line).
 
     Files are tried in file_rank order, so the first strong line is the best one. A weak
     line is kept as a fallback and cited only if no strong line matches anywhere. Every
@@ -552,7 +554,7 @@ def best_cite(files: list[tuple[str, list[str]]], patterns: list[str], hit) -> s
             if not (fast.search(low) if fast and low is not None else whole.search(text)):
                 continue
             for i, line in enumerate(lines, start=1):
-                if hit(cre, line):
+                if hit(cre, line, lines[i] if i < len(lines) else "") if with_next else hit(cre, line):
                     if not weak_line(name, line):
                         return f"{name}:{i}"
                     fallback = fallback or f"{name}:{i}"
@@ -1034,11 +1036,14 @@ EDGE_WORD_RE = (
 # A "=== Status ===" banner is not a comparison (item F18): "===" counts only with a
 # space and a value after it, as in "status === 'failed'".
 STATUS_ROUTE_RE = r"""status ==(?:=(?=\s+[a-z'"]))?(?!=)(?!\s*\d)"""
-# A status comparison routes only with a branch or route word on the line (item F22):
-# a view filter "| Inbox | `status == "none"` |" is not an edge.
+# A status comparison routes only with a routing context (items F22 and F25): the word
+# edge, route, goes to, back to, next step, an arrow or a node name, on the line or on the
+# next line (the branch body, as in "elif status == 'failed':" / "return 'fix'"). A branch
+# word alone is not enough: "if status == 'none':" / "inbox += 1" only counts. A view
+# filter "| Inbox | `status == "none"` |" is not an edge either.
 STATUS_ROUTE_CONTEXT_RE = re.compile(
-    r"\b(?:if|elif|when|unless|else|otherwise|then|case|rout(?:e|es|ed|ing)|go(?:es)?\s+(?:back|to)|goto|edges?)\b"
-    r"|->|=>|→|\?\s",
+    r"\b(?:rout(?:e|es|ed|ing)|go(?:es)?\s+(?:back|to)|goto|back\s+to|next\s+step|edges?)\b"
+    r"|->|=>|→|" + NODE_NAME_RE.pattern,
     re.I,
 )
 # An edge is conditional only with a condition on the same line (item F2):
@@ -1071,13 +1076,14 @@ def cite_bounded(files: list[tuple[str, list[str]]]) -> str | None:
 
 def cite_cond_edge(files: list[tuple[str, list[str]]]) -> str | None:
     """Like cite_affirmed, but the word edge counts only on a line with a condition (item F2)."""
-    def hit(cre, line):
+    def hit(cre, line, nxt):
         if cre.pattern == EDGE_WORD_RE and not EDGE_CONDITION_RE.search(line):
             return False
-        if cre.pattern == STATUS_ROUTE_RE and not STATUS_ROUTE_CONTEXT_RE.search(line):
+        if cre.pattern == STATUS_ROUTE_RE and not (
+                STATUS_ROUTE_CONTEXT_RE.search(line) or STATUS_ROUTE_CONTEXT_RE.search(nxt)):
             return False
         return any(not negated(line, m.start(), m.end()) for m in cre.finditer(line))
-    return best_cite(files, [r"tests passed", EDGE_WORD_RE, STATUS_ROUTE_RE], hit)
+    return best_cite(files, [r"tests passed", EDGE_WORD_RE, STATUS_ROUTE_RE], hit, with_next=True)
 
 
 def node_names(files: list[tuple[str, list[str]]]) -> tuple[set[str], str | None]:

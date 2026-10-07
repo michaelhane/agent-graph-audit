@@ -672,6 +672,17 @@ CASES = [
     ("f24 ok: MAX_ATTEMPTS in loop.py with escalate(job)",
      {"loop.py": "MAX_ATTEMPTS = 3\nif attempts >= MAX_ATTEMPTS: escalate(job)\n"},
      {"pass:attempt cap": True}),
+    # A status comparison in a counting function is not a route (item F25).
+    ("f25: if status == in a counter is not a conditional edge",
+     {"README.md": "```python\nif status == 'none':\n    inbox += 1\n```\n"},
+     {"fail:conditional edges": True}),
+    # Guards: a routing context on the line still counts (also f18 ok and f22 ok cases).
+    ("f25 ok: status == failed routes back to fix",
+     {"README.md": "If status == failed, the edge goes back to fix.\n"},
+     {"pass:conditional edges": True}),
+    ("f25 ok: status == with the next step on the line",
+     {"README.md": "When status == 'blocked', the next step is a person.\n"},
+     {"pass:conditional edges": True}),
 ]
 
 
