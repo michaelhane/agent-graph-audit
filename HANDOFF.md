@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 235 cases in total (one skips in a plain venv; the lab's `make test` gives 234/234 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 237 cases in total (one skips in a plain venv; the lab's `make test` gives 236/236 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 235 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 237 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 235/235
+python3 evals/run_evals.py                       # expect 237/237
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -87,6 +87,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F5 | A review-gate config counts as a human gate (decision 9): a config file (not a doc or code) whose name has `gate` or `review`, such as `hooks/review-gate.json` or `config/review-gate.yml`, with `mode` set to `ask` or `confirm`. It is cited before a gate phrase, because it is stronger evidence than a README sentence. Auto-merge anywhere still fails the gate (decision 3). Six new cases (the two fixtures, three guards: `"mode": "auto"` is no gate, `"mode": "ask"` in an unrelated `editor.json` is no gate, and a config gate next to auto-merge still fails; and a citation check that the config wins over a README gate): 224 cases; the lab's `make test` gives 223/223 (1 skipped). |
 | F8 | Speed. On a synthetic repo of 3,000 files (200 lines each, almost no evidence, so every check reads every line) the scorer took 31.7 s; now about 6 s (5.8 s for `report()` in-process, measured in the lab's venv, Python 3.12). Almost all the time was per-line regex calls in Python. Each file is now joined once (lines separated by `"\x00\n"`), and `best_cite` tries a file's lines only when the whole-file text matches the pattern (with `re.M`). The `"\x00"` keeps a lookahead at a line end from seeing the next line, so any line that matches alone also matches in the joined text. Patterns given to `best_cite` may not use `$`. For speed, the whole-file search drops a pattern's leading `\b` and lookbehinds (only widens it), and on all-ASCII files searches the lowercased text case-sensitively (same result as `re.I` when the pattern has no uppercase literal; other files and patterns keep `re.I`). `secret_hit`, `node_names` and `auto_merge_cite` skip files without their key word, and `file_rank`/`file_kind` are cached. Pass/fail and citations are unchanged: the per-line check is the same as before. Two new cases: the timing case (3,000 files under 10 s, with matches at lines 120 and 150 of a large file and an "edge" / "computing" line break still cited at their own line), and a guard that an uppercase keyword in ASCII text and a keyword in a non-ASCII file are still cited. Both guards passed before the fix; only the timing part failed. 220 cases; the lab's `make test` gives 219/219 (1 skipped). Not measured on a real 3,000-file repo. |
 | F6 | Dutch key names (decision 8). The secret check also takes `api_sleutel` (`api-sleutel`, `apisleutel`), `wachtwoord` and `geheim` as key words, from one shared `SECRET_WORDS` pattern that both the key regex and the F8 file prefilter use. The rules of decision 7 are unchanged: a quoted literal counts anywhere, an unquoted value only in env files, and the citation is `file:line`, never the value. So that the new key words don't flag Dutch placeholders, `jouw_…`/`jouw-…` and `…_hier`/`…-hier` count as placeholders, like `your_…` and `…_here`. `geheime…` is not `geheim` (a letter after the key word still cancels it). Nine new cases (three fixtures: `wachtwoord: "…"` in Markdown, `api_sleutel` in JSON, `APP_GEHEIM=` in `.env`; five guards: a Dutch placeholder, a path, an env-var name, an unquoted value in prose, and `geheimeTaal`; and a check that the Markdown case cites `README.md:3` and the value appears in neither the JSON nor the Markdown report): 235 cases; the lab's `make test` gives 234/234 (1 skipped). |
+| F9 | "Claim" as a verb about a statement no longer passes the claim check: `claim`/`claimed` directly followed by a subject pronoun (they, he, she, we, I, you), optionally after "that", or by "to be"/"to have" does not count ("Nobody can claim they created it first."). "Claim a job", "claim it" and "claimed by one worker" still count. By the pattern (no eval case), "claims"/"claiming" never matched the claim check, and "claim that X" with a noun subject ("claim that the cache is fresh") still passes. Two new cases (the fixture from the item, and the guard "Each job is claimed by one worker."; the guard passed before the fix): 228 cases; the lab's `make test` gives 227/227 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -167,7 +168,7 @@ Measure again after F1. Target: under 10 s on 3,000 tracked files.
 ### F6. Secret check: Dutch key names: done (see section 4)
 `wachtwoord: <literal>` in Markdown is not flagged today. Give the citation only, never the value.
 
-### F9. "claim" as a verb about a statement
+### F9. "claim" as a verb about a statement: done (see section 4)
 Found in the field check after F2 claim: a design doc passes "claim" with "nobody can retroactively claim they created something first". The F2 rule only excludes the noun ("a/the … claim").
 - Fixture: `README.md` "Nobody can claim they created it first." Expected: claim fails.
 - Guard: `README.md` "Each job is claimed by one worker." still passes.

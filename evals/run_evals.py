@@ -519,6 +519,11 @@ CASES = [
      {"pass:no inline secrets": True}),
     ("f6 ok: geheime is not geheim", {"config.py": 'geheimeTaal = "abcdefghijklmnop"\n'},
      {"pass:no inline secrets": True}),
+    # "Claim" as a verb about a statement is not a job claim (item F9).
+    ("f9: claim they created it is a statement", {"README.md": "Nobody can claim they created it first.\n"},
+     {"fail:claim": True}),
+    # Guard: a job claimed by a worker still counts.
+    ("f9 ok: claimed by one worker", {"README.md": "Each job is claimed by one worker.\n"}, {"pass:claim": True}),
 ]
 
 
