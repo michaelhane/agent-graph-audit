@@ -255,6 +255,11 @@ Found in the field check after F20: "budget" passes on `await page.goto('{url}',
 - Fixture: `README.md` with a code block holding `await page.goto(url, { timeout: 15000 });`. Expected: budget fails. Also `await page.waitForSelector('#x', { timeout: 5000 });`.
 - Guard: `loop.py` with `AGENT_TIMEOUT = 600` still passes.
 
+### F24. Attempt cap: the agent-word test is file-wide
+Found in the field check after F21: an image generator script still passes "attempt cap" on `MAX_ATTEMPTS = 50`, because the agent-word test looks at the whole file and its docstring says "Zone approach: fixed hierarchy at top" ("fixed" as in not variable). The word has to be near the cap, not anywhere in the file.
+- Fixture: `scripts/generate.py` with a docstring "Fixed layout at the top." and, 30 lines later, `MAX_ATTEMPTS = 50` and `while made < n and attempts < MAX_ATTEMPTS:`. Expected: attempt cap fails.
+- Guard: `loop.py` with `MAX_ATTEMPTS = 3` and `if attempts >= MAX_ATTEMPTS: escalate(job)` still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
