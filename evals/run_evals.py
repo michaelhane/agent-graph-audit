@@ -609,6 +609,14 @@ CASES = [
     ("f18 ok: status === 'failed' in JS",
      {"README.md": "```js\nif (job.status === 'failed') goTo('fix');\n```\n"},
      {"pass:conditional edges": True}),
+    # A timeout on one HTTP request is not a run budget (item F20).
+    ("f20: urlopen timeout is not a run budget",
+     {"README.md": "```python\nresp = urllib.request.urlopen(req, timeout=10)\n```\n"},
+     {"fail:budget": True}),
+    # Guard: a timeout on the agent's process still counts (AGENT_TIMEOUT and timeout-minutes: see f2 ok).
+    ("f20 ok: subprocess timeout in loop.py",
+     {"loop.py": "subprocess.run(agent_cmd, timeout=600)\n"},
+     {"pass:budget": True}),
 ]
 
 

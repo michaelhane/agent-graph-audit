@@ -1,7 +1,7 @@
 # Handoff: agent-graph-audit
 
 **Last updated:** 2026-10-07
-**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 266 cases in total (one skips in a plain venv; the lab's `make test` gives 265/265 with 1 skipped).
+**State:** v0.2 candidate: v0.1 plus review fixes H1–H7 and the open work below (all items done on branch `finish-v0.2`, pending Micha's review). `python3 evals/run_evals.py` gave **160/160** on Python 3.13.16 with PyYAML 6.0.3 before F1b; now 272 cases in total (one skips in a plain venv; the lab's `make test` gives 271/271 with 1 skipped).
 
 This file is the single source of truth for status. The two documents in `docs/reviews/` are history: they explain *why* each fix exists, but their "open" lists are out of date.
 
@@ -23,7 +23,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 |---|---|
 | `SKILL.md` | Skill instructions Claude follows when using it |
 | `scripts/score_setup.py` | The scorer. `--target <dir>`, optional `--json` |
-| `evals/run_evals.py` | 266 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
+| `evals/run_evals.py` | 272 regression cases. Every one is a bug or bypass found in review, or a guard against over-correcting one |
 | `references/rubric.md` | Point table, caps, where each check looks, negation rule |
 | `references/failure-modes.md` | When to distrust a high score |
 | `README.md` | User-facing docs and known limits |
@@ -35,7 +35,7 @@ It is a **claim-tier** scorer. It matches text and parses state and workflow fil
 
 ```bash
 pip install -r requirements.txt
-python3 evals/run_evals.py                       # expect 266/266
+python3 evals/run_evals.py                       # expect 272/272
 python3 scripts/score_setup.py --target .        # expect "Skipped: the target is this skill itself"
 ```
 
@@ -98,6 +98,7 @@ Scoring this folder returns 0% on purpose (see decision 6).
 | F18 | A "=== Status ===" banner no longer passes the conditional edges check: `status ==` followed by another `=` does not count (`print('=== Review Status ===')`). JS's `status ===` still counts when a space and a value follow it (`status === 'failed'`); a number after it still never counts (F11). Three new cases (the fixture from the item, and two guards that passed before the fix: "If status == failed, the edge goes back to fix." and `if (job.status === 'failed') goTo('fix');` in a JS code block): 265 cases; the lab's `make test` gives 264/264 (1 skipped). |
 | F17 | Speed on denser filler. On 3,000 files of 200 lines of lorem ipsum the scorer took 13.0 s in the lab's `make test` (venv, Python 3.12); `report()` in-process now takes about 2.7 s under cProfile (was 13.6 s). Almost all the time was in `re` searches of whole files for patterns that start with an alternation or a lookahead (fail closed, repeated error, attempt cap, budget), which the regex engine tries at every position. Each pattern is now parsed once (`re._parser`) into a set of lowercase strings, one of which any match must contain (a literal run, a required group, every branch of an alternation, a repeat with a minimum of 1; the most selective set wins). A file whose lowercased ASCII text holds none of them is skipped with `in` before any regex runs (`may_match`, used by `best_cite`, `secret_hit` and `node_names`). It is only a necessary condition: non-ASCII files, and patterns with nothing required, take the old path, and the per-line check is unchanged. One new case: the timing case (3,000 lorem ipsum files under 10 s, with every check's pass/fail and citation pinned to the output before the fix, including matches at lines 120, 150 and 180 of one file). Only the timing part failed before the fix. 263 cases; the lab's `make test` gives 262/262 (1 skipped). Not measured on the lab host's 17.7 s field repo itself. |
 | F19 | "Join" with a group as its object no longer passes the join check: `join` followed by the/a/an/this/that/my/your and a group noun (club, community, group, team, society, association, guild, movement, crowd, ranks, cause, party, mailing list, newsletter, waitlist, waiting list, server, discord, slack, forum, channel) does not count ("Pay a membership fee to join the club."). F12's "why join", "join us" and "join our …" are unchanged, so "Join our community." already failed before the fix. By the pattern (no eval case), a group noun not in the list ("join the choir") or with an adjective between ("join the local club") still passes. Four new cases (the two fixtures from the item, and two guards that passed before the fix: "The merge step waits for both reviews to join." and "Both branches meet at a join node."); only the club case failed before the fix: 270 cases; the lab's `make test` gives 269/269 (1 skipped). |
+| F20 | A timeout on one HTTP request no longer passes the budget check: `timeout` does not count on a line with an HTTP client call (`urlopen(`, `requests.get(` and the other `requests` verbs, `httpx.…(`, `aiohttp.…(`, `fetch(`). A timeout on anything else still counts (`AGENT_TIMEOUT = 600`, `timeout-minutes: 30`, `subprocess.run(agent_cmd, timeout=600)`). Two new cases (the fixture from the item, and the guard `subprocess.run(agent_cmd, timeout=600)` in `loop.py`, which passed before the fix; the item's other guards were already pinned by the F2 cases): 268 cases; the lab's `make test` gives 267/267 (1 skipped). |
 
 ## 5. Decisions (deliberate; change only on request)
 
@@ -233,7 +234,7 @@ Found in the field check after F12: a concept doc still passes "join" on "- Pay 
 - Fixture: `README.md` "Pay a membership fee to join the club." Expected: join fails. Also "Join our community."
 - Guard: `README.md` "The merge step waits for both reviews to join." still passes.
 
-### F20. An HTTP request timeout counts as a run budget
+### F20. An HTTP request timeout counts as a run budget: done (see section 4)
 Found in the field check after F13: "budget" passes on `resp = urllib.request.urlopen(req, timeout=10)` in a code snippet inside a `.claude/commands/*.md`, through `(?<![a-z])timeout`. It limits one HTTP call, not an agent run.
 - Fixture: `README.md` with a code block holding `resp = urllib.request.urlopen(req, timeout=10)`. Expected: budget fails.
 - Guard: `loop.py` with `AGENT_TIMEOUT = 600` and a workflow with `timeout-minutes: 30` still pass.
@@ -247,6 +248,11 @@ Found in the field check after F15: F15 skips UI code by folder name (`site/`, `
 Found in the field check after F18: "conditional edges" passes on a design-doc table row `| Inbox | \`status == "none"\` |`, a list filter, through `STATUS_ROUTE_RE`, which accepts any `status == "<word>"` without a routing context.
 - Fixture: `README.md` with the table `| View | Filter |` / `| Inbox | \`status == "none"\` |`. Expected: conditional edges fails.
 - Guard: `README.md` "If status == failed, the edge goes back to fix." still passes.
+
+### F23. A browser navigation timeout counts as a run budget
+Found in the field check after F20: "budget" passes on `await page.goto('{url}', { waitUntil: 'domcontentloaded', timeout: 15000 });` in a plan's code snippet, through `(?<![a-z])timeout`. F20 covers HTTP calls, not Playwright/Puppeteer navigation or waits.
+- Fixture: `README.md` with a code block holding `await page.goto(url, { timeout: 15000 });`. Expected: budget fails. Also `await page.waitForSelector('#x', { timeout: 5000 });`.
+- Guard: `loop.py` with `AGENT_TIMEOUT = 600` still passes.
 
 ### Known limits (accepted for now, documented in README)
 
