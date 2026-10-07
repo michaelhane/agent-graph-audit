@@ -781,12 +781,15 @@ def harness_checks(files: list[tuple[str, list[str]]]) -> dict:
     return score_checks(checks)
 
 
-# "Twice" counts only on a line that also stops or hands off (item F2):
-# "It crashed twice last week." is a count, not an exit.
-TWICE_EXIT_RE = (
+# "Twice" and "stuck" count only on a line that also stops or hands off (items F2, F14):
+# "It crashed twice last week." is a count and "If they're stuck, give a nudge." is
+# coaching, not an exit.
+EXIT_LINE = (
     r"^(?=.*\b(?:stop(?:s|ped)?|exit(?:s|ed)?|halt(?:s|ed)?|abort(?:s|ed)?|ends?|"
-    r"escalat(?:e|es|ed|ion)|give(?:s)? up|park(?:s|ed)?|blocked)\b).*\btwice\b"
+    r"escalat(?:e|es|ed|ion)|give(?:s)? up|park(?:s|ed)?|blocked)\b)"
 )
+TWICE_EXIT_RE = EXIT_LINE + r".*\btwice\b"
+STUCK_EXIT_RE = EXIT_LINE + r".*\bstuck\b"
 
 
 def loop_checks(files: list[tuple[str, list[str]]]) -> dict:
@@ -795,7 +798,7 @@ def loop_checks(files: list[tuple[str, list[str]]]) -> dict:
     prose = of_kind(files, "doc", "config")
     command = cite_any(verify_files(files), [VERIFY_CMD_RE.pattern])
     closed = cite_any(prose, [FAIL_CLOSED_RE.pattern])
-    repeated = cite_any(prose, [r"same error", r"same failure", TWICE_EXIT_RE, r"\bstuck\b"])
+    repeated = cite_any(prose, [r"same error", r"same failure", TWICE_EXIT_RE, STUCK_EXIT_RE])
     claim = cite_claim(prose)
     attempt_cap = cite_affirmed(files, [ATTEMPT_RE.pattern])
     workspace = cite_affirmed(files, [r"worktree", r"per job"], shared_words=True)
