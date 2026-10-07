@@ -185,6 +185,11 @@ Found in the field check after F2 budget: two repos still pass "budget" through 
 - Fixture: `README.md` "The user's cognitive budget is finite." Expected: budget fails. Also "Honeypot fields (`phone_number`, `budget`) are rejected."
 - Guard: `README.md` "Each run has a budget of 30 turns." still passes.
 
+### F14. "stuck" without a stop rule
+Found in the field check after F2 repeated error exit: a coaching doc passes "repeated error exit" on "If they're stuck, give a nudge (a hint or reframe), not the answer." through bare `\bstuck\b`. F2 only tightened `twice`.
+- Fixture: `README.md` "If they're stuck, give a nudge." Expected: repeated error exit fails.
+- Guard: `README.md` "When a job is stuck on the same error twice, stop and escalate." still passes.
+
 ### Known limits (accepted for now, documented in README)
 
 - Plain words in docs can still false-positive: `trace`, `claim`, "ignore" as a verb.
