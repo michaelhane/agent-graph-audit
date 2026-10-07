@@ -442,6 +442,16 @@ CASES = [
     # Guards: a trace as a record of runs still counts.
     ("f2 ok: each run writes a trace", {"README.md": "Each run writes a trace to runs/.\n"}, {"pass:trace": True}),
     ("f2 ok: trace files", {"README.md": "Trace files live in traces/.\n"}, {"pass:trace": True}),
+    # Something other than a cycle being bounded is not a bounded cycle (F2 bounded cycle).
+    ("f2: cost is bounded per turn", {"README.md": "Cost is bounded per turn.\n"},
+     {"fail:bounded cycle": True}),
+    ("f2: memory is strictly bounded", {"README.md": "Memory is strictly bounded.\n"},
+     {"fail:bounded cycle": True}),
+    # Guards: a bounded loop, cycle or retry still counts.
+    ("f2 ok: the fix loop is bounded", {"README.md": "The fix loop is bounded at 3 rounds.\n"},
+     {"pass:bounded cycle": True}),
+    ("f2 ok: retries are always bounded", {"README.md": "Retries are always bounded per job.\n"},
+     {"pass:bounded cycle": True}),
 ]
 
 
